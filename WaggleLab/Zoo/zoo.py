@@ -2,8 +2,9 @@ import tensorflow as tf
 import os
 from importlib import import_module
 
+
 class zooKeeper():
-    def __init__(self, dataName, modelName, loss=None, optimizer=None, metrics=None):
+    def __init__(self, dataName, modelName, show_model=False, loss=None, optimizer=None, metrics=None):
         self.dataName = dataName
         self.modelName = modelName
 
@@ -15,24 +16,26 @@ class zooKeeper():
 
         # TODO: make try to see if dataName is present and check for model by name of modelName
 
+        self.getModel(show_model)
 
-        self.getModel()
-
-    def getModel(self):
+    def getModel(self, show_model):
         try:
             print("-" * 20)
             print("Found model {}".format(self.modelName))
             print("-" * 20)
 
-            modelClass = getattr(import_module("Zoo.Models."+self.modelName), self.modelName)
+            modelClass = getattr(import_module("Zoo.Models." + self.modelName), self.modelName)
             self.modelObject = modelClass()
+
+            if show_model == True:
+                print("-" * 20)
+                print(self.modelObject.model.summary())
+                print("-" * 20)
 
 
         except:
             print("Could not properly load the model class for {}.".format(self.modelName))
             raise
-
-
 
 
 """
