@@ -1,3 +1,8 @@
+from math import floor
+from random import shuffle
+from tqdm import trange
+
+
 def testCallEngine():
     print("Called test function from ~/engine.py")
 
@@ -16,7 +21,7 @@ class Engine():
         if self.dataClass.bins > 1:
             self.multipleBins = True
 
-    def runCycle(self):
+    def runCycle(self, batch_size):
         # ------------------------------------
         # 1. Get data and update caches
         # ------------------------------------
@@ -37,6 +42,8 @@ class Engine():
 
         # Manage new labels within caches
         self.dataClass.train_cache.extend(ids)  # Add new ids to train cache
+
+        shuffle(self.dataClass.train_cache)  # Shuffle new dataClass.train_cache
         if self.dataClass.keep_bins == True:  # Remove new ids from unlabeled caches: (two cases) one or multiple unlabled caches
             for i in range(self.round, self.dataClass.bins):
                 [self.dataClass.unlabeled_cache[i].remove(id) for id in ids]
@@ -47,6 +54,10 @@ class Engine():
         # 2. Train and eval validation on batch
         # ------------------------------------
         # TODO: make train and eval routines
+        for batch in trange(floor(len(self.dataClass.train_cache) / batch_size)):
+            batch_ids = self.dataClass.train_cache[batch_size * batch:batch_size * (batch + 1)]
+            X, y = self.dataClass.getBatch(batch_ids)
+            # TODO: Left off here, pass X and y to train batch function in modelManager !!!
 
         # ------------------------------------
         # 3. Log results
@@ -56,11 +67,11 @@ class Engine():
         # End round by
         self.round += 1
 
-    def run(self, rounds):
+    def run(self, cycles, batch_size):
         """
         Purpose: Calls runCycle through for loop to perform active learning training
         :param rounds: int that determines number of active learning training rounds
         :return: None
         """
-        for i in range(rounds):
-            self.runCycle()
+        for i in range(cycles):
+            self.runCycle(batch_size)

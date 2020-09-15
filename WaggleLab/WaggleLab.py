@@ -76,9 +76,9 @@ def main():
     engine.run(n_cycles, keras_model_run_param, log=True, verbose=#)
     """
 
-    sample_size = 5
+    sample_size = 20
     engine = Engine(algo,dataClass,zk,sample_size)
-    engine.run(3)
+    engine.run(cycles=3,batch_size=64)
 
 
 
