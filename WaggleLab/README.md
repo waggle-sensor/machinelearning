@@ -12,6 +12,7 @@ pip install wagglelab
 ## Requirements
 ```python
 tensorflow==2.3.0
+```
 
 ## Usage
 ```python
