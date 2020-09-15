@@ -8,6 +8,11 @@ Use the package manager pip to install WL
 pip install wagglelab
 ```
 
+
+## Requirements
+```python
+tensorflow==2.3.0
+
 ## Usage
 ```python
 import wagglelab as wl
