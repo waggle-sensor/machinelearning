@@ -21,6 +21,7 @@ class DataManager:
         self.dataset_name = dataset_name
         self.n_total_samples = 0
         self.bins = bins  # Number of unlabeled caches corresponding to each round of retraining
+        self.keep_bins = False
 
         # Check if data set is in Data/DataSet
         self.checkDataSet()
@@ -73,6 +74,9 @@ class DataManager:
         if len(split) < 1 or len(split) > 4:
             print("ERROR: Improper length of split")
             exit()
+
+        # Set keep_bins as bool passed
+        self.keep_bins = keep_bins
 
         # Open data tab
         self.data_tab = pd.read_csv(self.data_path + "/raw_data/data_tab.csv")
@@ -158,12 +162,32 @@ class DataManager:
         temp_cache_df = pd.read_csv(self.data_path + "/val_cache_" + ".csv")
         self.val_cache = temp_cache_df["ID"].tolist()
 
-    def getBatch(self):
+    def sampleUCache(self, method, bin_n=None):
+        pass
+
+
+#######################################################
+
+class CustomGenerator(DataManager):
+    def __init__(self, dataset_name, bins=1):
+        super().__init__(dataset_name, bins)
+        dummy = 0
+
+    def getBatch(self, ids):
         # TODO: Make function that selects from right cache and loads data for Keras model
         # TODO: Make custom data loader function that loads data based on type (csv, image, etc) and reshapes
         pass
 
-    def sampleUCache(self, method, bin_n=None):
-        pass
 
 #######################################################
+
+class mnistLoader(DataManager):
+    def __init__(self, bins=1,keep_bins=False):
+        super().__init__("MNIST", bins)
+        self.keep_bins = keep_bins
+        self.loadCaches()
+
+    def getBatch(self, cache_ids: list):
+        # TODO: Logic to pick cache based off of cache_name and round
+
+        pass
