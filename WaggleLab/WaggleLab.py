@@ -1,6 +1,6 @@
 from Data.data import *
 from AL import algos
-from engine import testCallEngine
+from engine import Engine
 from Zoo import zoo
 
 
@@ -25,51 +25,68 @@ def main():
     # | ---------------------------
 
     dataName = "MNIST"
-    split = (.2, .2, .6)  # (train, val, unlabeled)\
+    split = (.2, .2, .6)  # (train, val, unlabeled)
     rounds = 3
     keep_bins = True
 
+    """
+    # Case 1: data is in raw form and data_tab files not made
     # parse raw data
-    # dataClass = data.DataManager(dataName)
-    # dataClass.parseData(split,rounds,keep_bins)
-
-    # load data that is already parsed
-    dataClass = DataManager(dataName, rounds)
+    dataClass = data.DataManager(dataName)
+    dataClass.parseData(split,rounds,keep_bins)
     dataClass.loadCaches()
+    
+    # Case 2: data has been parsed and just needs to load 
+    dataClass = DataManager(dataName, rounds)
+    dataClass = CustomGenerator(dataName,rounds)
+    dataClass.loadCaches()
+    
+    """
+
+    # Case 3: call DataManager for pre-made test class
+    dataClass = mnistLoader(rounds,True)
+
 
     # | ----------------------------
     # | 2. Select Active Learning algorithm
     # | ----------------------------
+
+    """
+    # algo() call takes cache and number of samples and returns samples based on algo method 
+    print(algo(dataClass.unlabeled_cache, 10))
+    """
+
     algo = algos.uniformSample()
-    #print(algo(dataClass.unlabeled_cache, 10))
-    #print(algo(dataClass.unlabeled_cache, 10))
-    #print(algo(dataClass.unlabeled_cache, 10))
     algo.reset()
 
     # | ----------------------------
     # | 3. Select model
     # | ----------------------------
-    """
-    Load keras model
-    """
 
     modelName = "mnistCNN"
-    zk = zoo.zooKeeper(dataName,modelName)
+    zk = zoo.zooKeeper(dataName, modelName, show_model=True)
 
     # | ----------------------------
     # | 4. Run algorithm and log results
     # | ----------------------------
+
     """
     Run simulation, make class to run 
-    engine = alEngine(model, AL algo, data_class)
+    engine = Engine(model, AL algo, data_class)
     engine.run(n_cycles, keras_model_run_param, log=True, verbose=#)
     """
-    testCallEngine()
+
+    sample_size = 5
+    engine = Engine(algo,dataClass,zk,sample_size)
+    engine.run(3)
+
+
 
 
     # | ----------------------------
     # | Done
     # | ----------------------------
+
     print("Finshed running")
 
 
