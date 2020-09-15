@@ -2,9 +2,10 @@ import tensorflow as tf
 from tensorflow.keras.layers import *
 from tensorflow.keras import Sequential
 
+
 class mnistCNN():
     def __init__(self, loss=None, optimizer=None, metrics=None):
-        self.input_shape = (28, 28, 1) # tf.keras.layers.Conv2D input shape (batch_size, height, width, channels)
+        self.input_shape = (28, 28, 1)  # tf.keras.layers.Conv2D input shape (batch_size, height, width, channels)
         self.num_classes = 10
 
         if loss == None:
@@ -27,7 +28,7 @@ class mnistCNN():
     def testLoad(self):
         print("-" * 20)
         print("Model class successfully loaded!")
-        print("-"*20)
+        print("-" * 20)
 
     def loadModel(self):
         model = Sequential()
@@ -41,32 +42,31 @@ class mnistCNN():
         model.add(Dense(1000, activation='relu'))
         model.add(Dense(self.num_classes, activation='softmax'))
 
-        self.model = model
-
         print("-" * 20)
         print("Successfully built the model")
         print("-" * 20)
+
+        return model
 
     def grad(self, inputs, targets):
         with tf.GradientTape() as tape:
             loss_value = self.loss(self.model, inputs, targets, training=True)
         return loss_value, tape.gradient(loss_value, self.model.trainable_variables)
 
-    def trainBatch(self,inputs, targets):
+    def trainBatch(self, inputs, targets):
         loss_value, grads = self.grad(inputs, targets)
         self.opt.apply_gradients(zip(grads, self.model.trainable_variables))
 
-        pass
+        return loss_value
 
-    def predict(self,inputs):
+    def predict(self, inputs):
         yh = self.model(inputs)
         return yh
 
-    def eval(self,inputs,targets):
-        score = self.model.evaluate(inputs,targets)
-        return score
+    def eval(self, inputs, targets):
+        yh = self.predict(inputs)
+        loss_value = self.loss(yh,targets)
+        return loss_value
 
     def saveModel(self):
         pass
-
-
