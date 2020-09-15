@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 from math import floor
 
 
@@ -182,12 +183,25 @@ class CustomGenerator(DataManager):
 #######################################################
 
 class mnistLoader(DataManager):
-    def __init__(self, bins=1,keep_bins=False):
+    def __init__(self, bins=1, keep_bins=False):
         super().__init__("MNIST", bins)
         self.keep_bins = keep_bins
         self.loadCaches()
+        self.data_df = pd.read_csv(self.data_path + "/raw_data/mnist.csv", iterator=True, chunksize=5000)
+        self.data_df = pd.concat(self.data_df, ignore_index=True)
 
     def getBatch(self, cache_ids: list):
-        # TODO: Logic to pick cache based off of cache_name and round
+        # Select data based off of passed cache_ids
+        batchData = self.data_df.loc[self.data_df['ID'].isin(cache_ids)]
+        y = batchData[["Label"]].values
+        X = batchData.iloc[:, 2:].values
 
-        pass
+        # Reshape input X
+        X = X.reshape(X.shape[0], 28, 28, 1)
+
+        # One hot encode targets y
+        y_onehot = np.zeros((y.shape[0], 10))
+        for i in range(y_onehot.shape[0]):
+            y_onehot[i, y[i]] = 1
+
+        return X, y_onehot
