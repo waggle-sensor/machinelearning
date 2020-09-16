@@ -198,6 +198,7 @@ class mnistLoader(DataManager):
 
         # Reshape input X
         X = X.reshape(X.shape[0], 28, 28, 1)
+        X = X/255 # Scale input data between [0,1]
 
         # One hot encode targets y
         y_onehot = np.zeros((y.shape[0], 10))
