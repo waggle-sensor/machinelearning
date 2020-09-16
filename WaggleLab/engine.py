@@ -1,6 +1,8 @@
 from math import floor
 from random import shuffle
+from itertools import chain
 from tqdm import trange
+import matplotlib.pyplot as plt
 
 
 def testCallEngine():
@@ -9,6 +11,9 @@ def testCallEngine():
 
 class Engine():
     def __init__(self, algoClass, dataClass, zooKeeper, sample_size):
+        self.intialTrain_metric_log = {}
+        self.train_metric_log = {}
+
         # Declare passed objects
         self.algoClass = algoClass  # Class for Active Learning algo with method to select batches
         self.dataClass = dataClass  # Data class that stores cache df and has method to load in data based off of algoClass batch
@@ -53,11 +58,18 @@ class Engine():
         # ------------------------------------
         # 2. Train and eval validation on batch
         # ------------------------------------
-        # TODO: make train and eval routines
+        total_loss = []
         for batch in trange(floor(len(self.dataClass.train_cache) / batch_size)):
             batch_ids = self.dataClass.train_cache[batch_size * batch:batch_size * (batch + 1)]
             X, y = self.dataClass.getBatch(batch_ids)
-            # TODO: Left off here, pass X and y to train batch function in modelManager !!!
+
+            loss = self.modelManager.modelObject.trainBatch(X, y)
+            total_loss.append(loss)
+
+        total_loss = list(chain(*total_loss))
+        avg_loss = sum(total_loss) / len(total_loss)
+        print("Training loss: {}".format(self.round, avg_loss))
+        self.train_metric_log["Round_" + str(self.round)] = avg_loss.numpy()
 
         # ------------------------------------
         # 3. Log results
@@ -67,11 +79,37 @@ class Engine():
         # End round by
         self.round += 1
 
-    def run(self, cycles, batch_size):
+    def run(self, rounds, cycles, batch_size):
         """
         Purpose: Calls runCycle through for loop to perform active learning training
         :param rounds: int that determines number of active learning training rounds
         :return: None
         """
-        for i in range(cycles):
-            self.runCycle(batch_size)
+        for i in range(rounds):
+            print("Round: {}".format(i))
+            for j in range(cycles):
+                print("Cycle: {}".format(j))
+                self.runCycle(batch_size)
+
+    def intialTrain(self, epochs, batch_size):
+        for epoch in range(epochs):
+            total_loss = []
+            for batch in trange(floor(len(self.dataClass.train_cache) / batch_size)):
+                batch_ids = self.dataClass.train_cache[batch_size * batch:batch_size * (batch + 1)]
+                X, y = self.dataClass.getBatch(batch_ids)
+
+                loss = self.modelManager.modelObject.trainBatch(X, y)
+                total_loss.append(loss)
+
+            total_loss = list(chain(*total_loss))
+            avg_loss = sum(total_loss) / len(total_loss)
+            print("{}. training average loss: {}".format(epoch, avg_loss))
+            self.intialTrain_metric_log["Epoch_" + str(epoch)] = avg_loss.numpy()
+        print('Finished initial training of model.')
+
+        plt.scatter(list(range(len(self.intialTrain_metric_log))), list(self.intialTrain_metric_log.values()))
+        plt.xlabel("Epoch")
+        plt.ylabel("Error")
+        plt.title("Epoch vs Error on Train")
+        plt.show()
+        input('press return to continue')

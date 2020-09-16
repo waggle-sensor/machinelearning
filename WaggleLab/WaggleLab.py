@@ -44,8 +44,7 @@ def main():
     """
 
     # Case 3: call DataManager for pre-made test class
-    dataClass = mnistLoader(rounds,True)
-
+    dataClass = mnistLoader(rounds, True)
 
     # | ----------------------------
     # | 2. Select Active Learning algorithm
@@ -70,18 +69,15 @@ def main():
     # | 4. Run algorithm and log results
     # | ----------------------------
 
-    """
-    Run simulation, make class to run 
-    engine = Engine(model, AL algo, data_class)
-    engine.run(n_cycles, keras_model_run_param, log=True, verbose=#)
-    """
-
+    # Declare engine
     sample_size = 20
-    engine = Engine(algo,dataClass,zk,sample_size)
-    engine.run(cycles=3,batch_size=64)
+    engine = Engine(algo, dataClass, zk, sample_size)
 
+    # Initial training of model on original training data
+    engine.intialTrain(epochs=10, batch_size=64)
 
-
+    # Run active learning algo
+    # engine.run(rounds=3,cycles=5,batch_size=64)
 
     # | ----------------------------
     # | Done
