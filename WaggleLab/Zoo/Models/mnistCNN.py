@@ -14,7 +14,7 @@ class mnistCNN():
             self.loss = loss
 
         if optimizer == None:
-            self.opt = tf.keras.optimizers.SGD(lr=0.01)
+            self.opt = tf.keras.optimizers.Adam(lr=0.001)
         else:
             self.opt = optimizer
 
@@ -32,14 +32,14 @@ class mnistCNN():
 
     def loadModel(self):
         model = Sequential()
-        model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1),
+        model.add(Conv2D(16, kernel_size=(5, 5), strides=(1, 1),
                          activation='relu',
                          input_shape=self.input_shape))
         model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-        model.add(Conv2D(64, (5, 5), activation='relu'))
+        model.add(Conv2D(32, (5, 5), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Flatten())
-        model.add(Dense(1000, activation='relu'))
+        model.add(Dense(120, activation='relu'))
         model.add(Dense(self.num_classes, activation='softmax'))
 
         print("-" * 20)
@@ -50,13 +50,12 @@ class mnistCNN():
 
     def grad(self, inputs, targets):
         with tf.GradientTape() as tape:
-            loss_value = self.loss(self.model, inputs, targets, training=True)
+            loss_value = self.loss(self.model(inputs, training=True), targets)
         return loss_value, tape.gradient(loss_value, self.model.trainable_variables)
 
-    def trainBatch(self, inputs, targets):
+    def trainBatch(self, inputs, targets) -> float:
         loss_value, grads = self.grad(inputs, targets)
         self.opt.apply_gradients(zip(grads, self.model.trainable_variables))
-
         return loss_value
 
     def predict(self, inputs):
@@ -65,7 +64,7 @@ class mnistCNN():
 
     def eval(self, inputs, targets):
         yh = self.predict(inputs)
-        loss_value = self.loss(yh,targets)
+        loss_value = self.loss(yh, targets)
         return loss_value
 
     def saveModel(self):
