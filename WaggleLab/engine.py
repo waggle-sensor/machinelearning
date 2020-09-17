@@ -12,7 +12,9 @@ def testCallEngine():
 class Engine():
     def __init__(self, algoClass, dataClass, zooKeeper, sample_size):
         self.intialTrain_metric_log = {}
+        self.intialVal_metric_log = {}
         self.train_metric_log = {}
+        self.val_metric_log = {}
 
         # Declare passed objects
         self.algoClass = algoClass  # Class for Active Learning algo with method to select batches
@@ -26,7 +28,38 @@ class Engine():
         if self.dataClass.bins > 1:
             self.multipleBins = True
 
-    def runCycle(self, batch_size):
+    def trainBatch(self, cycles, batch_size):
+        total_loss = []
+        for i in range(cycles):
+            for batch in trange(floor(len(self.dataClass.train_cache) / batch_size)):
+                batch_ids = self.dataClass.train_cache[batch_size * batch:batch_size * (batch + 1)]
+                X, y = self.dataClass.getBatch(batch_ids)
+                loss = self.modelManager.modelObject.trainBatch(X, y)
+                total_loss.append(loss)
+        return total_loss
+
+    def valTest(self, batch_size):
+        total_loss = []
+        for batch in trange(floor(len(self.dataClass.val_cache) / batch_size)):
+            batch_ids = self.dataClass.val_cache[batch_size * batch:batch_size * (batch + 1)]
+            X, y = self.dataClass.getBatch(batch_ids)
+            loss = self.modelManager.modelObject.eval(X, y)
+            total_loss.append(loss)
+        return total_loss
+
+    def plotLog(self, logs, xlabel, ylabel, title, labels):
+        fig, ax = plt.subplots()
+        for i, log in enumerate(logs):
+            ax.scatter(list(range(len(log))), list(log.values()), label=labels[i])
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.title(title)
+        ax.legend()
+        ax.grid(True)
+
+        plt.show()
+
+    def runCycle(self, batch_size, cycles):
         # ------------------------------------
         # 1. Get data and update caches
         # ------------------------------------
@@ -56,30 +89,15 @@ class Engine():
             self.dataClass.unlabeled_cache.remove(ids)
 
         # ------------------------------------
-        # 2. Train and eval validation on batch
+        # 2. Train and log
         # ------------------------------------
-        total_loss = []
-        for batch in trange(floor(len(self.dataClass.train_cache) / batch_size)):
-            batch_ids = self.dataClass.train_cache[batch_size * batch:batch_size * (batch + 1)]
-            X, y = self.dataClass.getBatch(batch_ids)
-
-            loss = self.modelManager.modelObject.trainBatch(X, y)
-            total_loss.append(loss)
-
+        total_loss = self.trainBatch(cycles, batch_size)
         total_loss = list(chain(*total_loss))
         avg_loss = sum(total_loss) / len(total_loss)
         print("Training loss: {}".format(self.round, avg_loss))
         self.train_metric_log["Round_" + str(self.round)] = avg_loss.numpy()
 
-        # ------------------------------------
-        # 3. Log results
-        # ------------------------------------
-        # TODO: log results routines
-
-        # End round by
-        self.round += 1
-
-    def run(self, rounds, cycles, batch_size):
+    def run(self, rounds, cycles, batch_size, val=True, plot=False):
         """
         Purpose: Calls runCycle through for loop to perform active learning training
         :param rounds: int that determines number of active learning training rounds
@@ -87,29 +105,52 @@ class Engine():
         """
         for i in range(rounds):
             print("Round: {}".format(i))
-            for j in range(cycles):
-                print("Cycle: {}".format(j))
-                self.runCycle(batch_size)
+            self.runCycle(batch_size, cycles)
 
-    def intialTrain(self, epochs, batch_size):
+            if val == True:
+                total_loss = self.valTest(batch_size)
+                total_loss = list(chain(*total_loss))
+                avg_loss = sum(total_loss) / len(total_loss)
+                print("{}. Val loss: {}".format(self.round, avg_loss))
+                self.val_metric_log["Round_" + str(self.round)] = avg_loss.numpy()
+
+            self.round += 1
+
+        if plot == True:
+            xlabel = "Round"
+            ylabel = "Error"
+            title = "Round vs Error on Active Learning"
+            if val == True:
+                labels = ["Train", "Val"]
+                self.plotLog([self.train_metric_log, self.val_metric_log], xlabel, ylabel, title, labels)
+            else:
+                self.plotLog([self.train_metric_log], xlabel, ylabel, title, "Train")
+            input('press return to continue')
+
+    def intialTrain(self, epochs, batch_size, val=True, plot=False):
         for epoch in range(epochs):
-            total_loss = []
-            for batch in trange(floor(len(self.dataClass.train_cache) / batch_size)):
-                batch_ids = self.dataClass.train_cache[batch_size * batch:batch_size * (batch + 1)]
-                X, y = self.dataClass.getBatch(batch_ids)
-
-                loss = self.modelManager.modelObject.trainBatch(X, y)
-                total_loss.append(loss)
-
+            total_loss = self.trainBatch(1, batch_size)
             total_loss = list(chain(*total_loss))
             avg_loss = sum(total_loss) / len(total_loss)
             print("{}. training average loss: {}".format(epoch, avg_loss))
             self.intialTrain_metric_log["Epoch_" + str(epoch)] = avg_loss.numpy()
+
+            if val == True:
+                total_loss = self.valTest(batch_size)
+                total_loss = list(chain(*total_loss))
+                avg_loss = sum(total_loss) / len(total_loss)
+                print("{}. Val loss: {}".format(self.round, avg_loss))
+                self.intialVal_metric_log["Epoch_" + str(epoch)] = avg_loss.numpy()
+
         print('Finished initial training of model.')
 
-        plt.scatter(list(range(len(self.intialTrain_metric_log))), list(self.intialTrain_metric_log.values()))
-        plt.xlabel("Epoch")
-        plt.ylabel("Error")
-        plt.title("Epoch vs Error on Train")
-        plt.show()
-        input('press return to continue')
+        if plot == True:
+            xlabel = "Epoch"
+            ylabel = "Error"
+            title = "Epoch vs Error on Train"
+            if val == True:
+                labels = ["Train", "Val"]
+                self.plotLog([self.intialTrain_metric_log, self.intialVal_metric_log], xlabel, ylabel, title, labels)
+            else:
+                self.plotLog([self.intialTrain_metric_log], xlabel, ylabel, title, "Train")
+            input('press return to continue')

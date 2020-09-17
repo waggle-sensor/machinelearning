@@ -6,6 +6,7 @@ from Zoo import zoo
 
 #######################################################
 
+
 def main():
     """
     How to use:
@@ -24,46 +25,29 @@ def main():
     # | 1. Select data
     # | ---------------------------
 
+    # DataManager parameters
     dataName = "MNIST"
     split = (.2, .2, .6)  # (train, val, unlabeled)
     rounds = 3
     keep_bins = True
 
-    """
-    # Case 1: data is in raw form and data_tab files not made
-    # parse raw data
-    dataClass = data.DataManager(dataName)
-    dataClass.parseData(split,rounds,keep_bins)
-    dataClass.loadCaches()
-    
-    # Case 2: data has been parsed and just needs to load 
-    dataClass = DataManager(dataName, rounds)
-    dataClass = CustomGenerator(dataName,rounds)
-    dataClass.loadCaches()
-    
-    """
-
-    # Case 3: call DataManager for pre-made test class
-    dataClass = mnistLoader(rounds, True)
+    dataClass = DataManager(dataName)  # Declare data manager class
+    dataClass.parseData(split, rounds, keep_bins)  # Parse MNIST data to custom split and rounds
+    dataClass = mnistLoader(rounds, True)  # Reload custom dataClass for MNIST with new custom split and rounds
 
     # | ----------------------------
     # | 2. Select Active Learning algorithm
     # | ----------------------------
 
-    """
-    # algo() call takes cache and number of samples and returns samples based on algo method 
-    print(algo(dataClass.unlabeled_cache, 10))
-    """
-
-    algo = algos.uniformSample()
+    algo = algos.uniformSample()  # Randomly selects samples from each round's cache
     algo.reset()
 
     # | ----------------------------
     # | 3. Select model
     # | ----------------------------
 
-    modelName = "mnistCNN"
-    zk = zoo.zooKeeper(dataName, modelName, show_model=True)
+    modelName = "mnistCNN"  # Pick pre-made model
+    zk = zoo.zooKeeper(dataName, modelName, show_model=True)  # Load model and compile
 
     # | ----------------------------
     # | 4. Run algorithm and log results
