@@ -69,6 +69,10 @@ class uniformSample(alAlgo):
         # Log which samples were used for that round
         self.sample_log[str(self.round)] = batch
 
+        print("\n")
+        print("Round {} selected samples: ".format(idx))
+        print("\n")
+
         # Increment round
         self.round += 1
 
