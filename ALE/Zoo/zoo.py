@@ -28,6 +28,7 @@ class zooKeeper():
 
             # Display model layers, shapes, and number of parameters
             if show_model == True:
+                print("\n")
                 print("-" * 20)
                 print(self.modelObject.model.summary())
                 print("-" * 20)
