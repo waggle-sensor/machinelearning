@@ -70,7 +70,7 @@ class mnistCNN():
     def loadModel(self) -> tf.keras.Sequential():
         """ Creates tf.keras model and returns it. Change model architecture here """
 
-        model = Sequential()
+        model = Sequential(name="mnistCNN")
         model.add(Conv2D(16, kernel_size=(5, 5), strides=(1, 1),
                          activation='relu',
                          input_shape=self.input_shape))
