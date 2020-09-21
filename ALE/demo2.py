@@ -12,6 +12,8 @@ from AL import algos
 from engine import Engine
 from Zoo import zoo
 
+import tensorflow as tf
+
 
 #######################################################
 
@@ -56,7 +58,8 @@ def main():
     # | ----------------------------
 
     modelName = "mnistCNN"  # Pick pre-made model
-    zk = zoo.zooKeeper(dataName, modelName, show_model=True)  # Load model and compile
+    metrics = [tf.keras.metrics.MeanSquaredError(), tf.keras.metrics.KLDivergence()]
+    zk = zoo.zooKeeper(dataName, modelName, show_model=True, metrics=metrics)  # Load model and compile
 
     # | ----------------------------
     # | 4. Run algorithm and log results

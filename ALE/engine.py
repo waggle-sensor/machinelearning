@@ -1,3 +1,4 @@
+import numpy as np
 from math import floor
 from random import shuffle
 from itertools import chain
@@ -82,12 +83,14 @@ class Engine():
 
     def valTest(self, batch_size):
         total_loss = []
+        total_scores = []
         for batch in trange(floor(len(self.dataClass.val_cache) / batch_size)):
             batch_ids = self.dataClass.val_cache[batch_size * batch:batch_size * (batch + 1)]
             X, y = self.dataClass.getBatch(batch_ids)
-            loss = self.modelManager.modelObject.eval(X, y)
+            loss, scores = self.modelManager.modelObject.eval(X, y)
             total_loss.append(loss)
-        return total_loss
+            total_scores.append(scores)
+        return total_loss, total_scores
 
     def plotLog(self, logs, xlabel, ylabel, title, labels):
         fig, ax = plt.subplots()
@@ -153,11 +156,20 @@ class Engine():
             self.runCycle(batch_size, cycles)
 
             if val == True:
-                total_loss = self.valTest(batch_size)
+                total_loss, total_scores = self.valTest(batch_size)
                 total_loss = list(chain(*total_loss))
                 avg_loss = sum(total_loss) / len(total_loss)
                 print("{}. Val loss: {}".format(self.round, avg_loss))
                 self.val_metric_log["Round_" + str(self.round)] = avg_loss.numpy()
+
+                keys = list(total_scores[0].keys())
+                for i,k in enumerate(keys):
+                    samples = []
+                    for j,sample in enumerate(total_scores):
+                        samples.append((sample[k]))
+                    samples = np.mean(samples)
+                    print("{}: {}".format(self.modelManager.modelObject.metrics[i].name, samples))
+
 
             self.round += 1
 
@@ -184,11 +196,20 @@ class Engine():
             self.intialTrain_metric_log["Epoch_" + str(epoch)] = avg_loss.numpy()
 
             if val == True:
-                total_loss = self.valTest(batch_size)
+                total_loss, total_scores = self.valTest(batch_size)
+
                 total_loss = list(chain(*total_loss))
                 avg_loss = sum(total_loss) / len(total_loss)
                 print("{}. Val loss: {}".format(self.round, avg_loss))
                 self.intialVal_metric_log["Epoch_" + str(epoch)] = avg_loss.numpy()
+
+                keys = list(total_scores[0].keys())
+                for i,k in enumerate(keys):
+                    samples = []
+                    for j,sample in enumerate(total_scores):
+                        samples.append((sample[k]))
+                    samples = np.mean(samples)
+                    print("{}: {}".format(self.modelManager.modelObject.metrics[i].name, samples))
 
         print('Finished initial training of model.')
 
