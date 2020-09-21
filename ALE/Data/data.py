@@ -18,6 +18,7 @@ class DataManager:
     # z = 1
 
     def __init__(self, dataset_name, bins=1):
+
         assert isinstance(dataset_name, str), "dataset_name must be a string"
         self.dataset_name = dataset_name
         self.n_total_samples = 0
@@ -65,6 +66,10 @@ class DataManager:
             states if to role over previous ul cache to current
         """
 
+        print("-" * 20)
+        print("Parsing raw data")
+        print("-" * 20)
+
         # Check if bins is an int
         if isinstance(bins, int) != True:
             raise ValueError('bins is not of type int, bins: {}'.format(bins))
@@ -101,7 +106,8 @@ class DataManager:
         # Make files to keep track of what is in each cache
 
         # Save unlabeled cache
-        if bins > 1:
+        if self.bins > 1:
+            cache_size_track = []
             p_bin_cache_df = None
             os.mkdir(self.data_path + "/ul_cache")
             n_samples_bin = floor(len(self.unlabeled_cache) / bins)
@@ -123,12 +129,13 @@ class DataManager:
                     bin_cache_df = bin_cache_df.reset_index(drop=True)
 
                 bin_cache_df.to_csv(self.data_path + "/ul_cache" + "/ul_cache_" + str(i) + ".csv")
+                cache_size_track.append(len(bin_cache_df))
                 if keep_bins == True:
                     p_bin_cache_df = bin_cache_df
         else:
             bin_cache_df = self.data_tab.loc[self.data_tab['ID'].isin(self.unlabeled_cache)]
             bin_cache_df = bin_cache_df.reset_index(drop=True)
-            bin_cache_df.to_csv(self.data_path + "/ul_cache_" + ".csv")
+            bin_cache_df.to_csv(self.data_path + "/ul_cache" + ".csv")
 
         # Save train cache
         train_cache_df = self.data_tab.loc[self.data_tab['ID'].isin(self.train_cache)]
@@ -140,6 +147,18 @@ class DataManager:
         val_cache_df = val_cache_df.reset_index(drop=True)
         val_cache_df.to_csv(self.data_path + "/val_cache_" + ".csv")
 
+        print("\n")
+        print("Data split:")
+        print("{} samples in training cache.".format(len(train_cache_df)))
+        print("{} samples in validation cache.".format(len(val_cache_df)))
+
+        if self.bins == 1:
+            print("{} samples in unlabled cache.".format(len(bin_cache_df)))
+        else:
+            for i, s in enumerate(cache_size_track):
+                print("Unlabeled cache {} has {} samples.".format(i, s))
+        print("\n")
+
         # Clear cache list values
         self.clearCache()
 
@@ -149,7 +168,7 @@ class DataManager:
         """
         # Load unlabeled cache ids
         if self.bins == 1:
-            temp_cache_df = pd.read_csv(self.data_path + "/ul_cache_" + ".csv")
+            temp_cache_df = pd.read_csv(self.data_path + "/ul_cache" + ".csv")
             self.unlabeled_cache = temp_cache_df["ID"].tolist()
         else:
             for i in range(self.bins):
@@ -209,8 +228,10 @@ class mnistLoader(DataManager):
         Returns processed input and target data.
 
     """
+
     def __init__(self, bins=1, keep_bins=False):
         super().__init__("MNIST", bins)
+
         self.keep_bins = keep_bins
         self.loadCaches()
         self.data_df = pd.read_csv(self.data_path + "/raw_data/mnist.csv", iterator=True, chunksize=5000)
