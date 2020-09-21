@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.layers import *
 from tensorflow.keras import Sequential
+import numpy as np
 
 
 #######################################################
@@ -55,7 +56,8 @@ class mnistCNN():
 
         # Metrics for model
         if metrics == None:
-            self.metrics = ['accuracy']
+            print("didnt get metrics list")
+            self.metrics = [tf.keras.metrics.MeanSquaredError()]
         else:
             self.metrics = metrics
 
@@ -103,11 +105,24 @@ class mnistCNN():
         yh = self.model(inputs)
         return yh
 
+    def getMetrics(self, yh, targets):
+        scores = {}
+        for i, metric in enumerate(self.metrics):
+            metric.reset_states()
+            metric.update_state(yh, targets)
+            scores[metric.name] = metric.result().numpy()
+            metric.reset_states()
+        return scores
+
     def eval(self, inputs, targets):
         """ Used for predicting with model and checking error when labels are provided """
         yh = self.predict(inputs)
         loss_value = self.loss(yh, targets)
-        return loss_value
+
+        metric_scores = self.getMetrics(yh, targets)
+
+
+        return loss_value, metric_scores
 
     def saveModel(self):
         pass
