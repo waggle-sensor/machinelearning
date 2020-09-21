@@ -37,12 +37,12 @@ def main():
     # DataManager parameters
     dataName = "MNIST"
     split = (.2, .2, .6)  # (train, val, unlabeled)
-    rounds = 3
-    keep_bins = True
+    bins = 1
+    keep_bins = False
 
     dataClass = DataManager(dataName)  # Declare data manager class
-    dataClass.parseData(split, rounds, keep_bins)  # Parse MNIST data to custom split and rounds
-    dataClass = mnistLoader(rounds, True)  # Reload custom dataClass for MNIST with new custom split and rounds
+    dataClass.parseData(split, bins, keep_bins)  # Parse MNIST data to custom split and rounds
+    dataClass = mnistLoader(bins, keep_bins)  # Reload custom dataClass for MNIST with new custom split and rounds
 
     # | ----------------------------
     # | 2. Select Active Learning algorithm
@@ -72,7 +72,7 @@ def main():
     # Run active learning algo
     # Round is how many times the active learning algo samples
     # cycles is how many epochs the model is retrained each time a round occurs of sampling
-    engine.run(rounds=2, cycles=1, batch_size=64, val=True, plot=True)
+    engine.run(rounds=2, cycles=2, batch_size=64, val=True, plot=True)
 
     # | ----------------------------
     # | Done

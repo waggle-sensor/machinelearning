@@ -109,7 +109,7 @@ class Engine():
         # Get round unlabeled cache ids
         print("Active Learning training round: {}".format(self.round))
 
-        if self.multipleBins == True:
+        if self.dataClass.bins > 1:
             if self.round >= self.dataClass.bins:
                 raise ValueError(
                     'Error: Engine has been called to run rounds more times than number of unlabeled caches!')
@@ -124,11 +124,11 @@ class Engine():
         self.dataClass.train_cache.extend(ids)  # Add new ids to train cache
 
         shuffle(self.dataClass.train_cache)  # Shuffle new dataClass.train_cache
-        if self.dataClass.keep_bins == True:  # Remove new ids from unlabeled caches: (two cases) one or multiple unlabled caches
+        if self.dataClass.keep_bins == True and self.dataClass.bins > 1:  # Remove new ids from unlabeled caches: (two cases) one or multiple unlabled caches
             for i in range(self.round, self.dataClass.bins):
                 [self.dataClass.unlabeled_cache[i].remove(id) for id in ids]
         else:
-            self.dataClass.unlabeled_cache.remove(ids)
+            [self.dataClass.unlabeled_cache.remove(id) for id in ids]
 
         # ------------------------------------
         # 2. Train and log
@@ -145,6 +145,9 @@ class Engine():
         :param rounds: int that determines number of active learning training rounds
         :return: None
         """
+
+        print("\n" + "Active Learning algorithm start:")
+
         for i in range(rounds):
             print("Round: {}".format(i))
             self.runCycle(batch_size, cycles)
@@ -167,9 +170,12 @@ class Engine():
                 self.plotLog([self.train_metric_log, self.val_metric_log], xlabel, ylabel, title, labels)
             else:
                 self.plotLog([self.train_metric_log], xlabel, ylabel, title, "Train")
-            input('press return to continue')
+            input('press return to continue' + "\n")
+
+        print("\n" + "Active Learning algorithm done.")
 
     def initialTrain(self, epochs, batch_size, val=True, plot=False):
+        print("\n" + "Training model on training cache:")
         for epoch in range(epochs):
             total_loss = self.trainBatch(1, batch_size)
             total_loss = list(chain(*total_loss))
