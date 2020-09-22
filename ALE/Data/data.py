@@ -202,6 +202,39 @@ class CustomGenerator(DataManager):
 
 #######################################################
 
+class ToyALoader(DataManager):
+    def __init__(self, bins=1, keep_bins=False):
+        super().__init__("ToyA", bins)
+
+        self.keep_bins = keep_bins
+        self.loadCaches()
+        self.data_df = pd.read_csv(self.data_path + "/raw_data/toyA.csv", iterator=True, chunksize=5000)
+        self.data_df = pd.concat(self.data_df, ignore_index=True)
+
+    def getBatch(self, cache_ids: list):
+        # Select data based off of passed cache_ids
+        batchData = self.data_df.loc[self.data_df['ID'].isin(cache_ids)]
+        y = batchData[["y"]].values
+        X = batchData.iloc[:, :2].values
+
+        # Reshape input X
+        print(X.shape)
+
+        # One hot encode targets y
+        y_onehot = np.zeros((y.shape[0], 2))
+        for i in range(y_onehot.shape[0]):
+            if y[i] == -1:
+                y_onehot[i, 0] = 1
+            else:
+                y_onehot[i,1] = 1
+
+        return X, y_onehot
+
+
+
+#######################################################
+
+
 class mnistLoader(DataManager):
     """
     mnistLoader Documentation:
