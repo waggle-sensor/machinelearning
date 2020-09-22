@@ -38,7 +38,7 @@ def main():
     # DataManager parameters
     dataName = "ToyA"
     split = (.05, .05, .9)  # (train, val, unlabeled)
-    bins = 5
+    bins = 3
     keep_bins = True
 
     dataClass = DataManager(dataName)  # Declare data manager class
@@ -51,7 +51,7 @@ def main():
     # | 2. Select Active Learning algorithm
     # | ----------------------------
 
-    algo = algos.uniformSample()  # Randomly selects samples from each round's cache
+    algo = algos.leastConfidence()  # Randomly selects samples from each round's cache
     algo.reset()
 
     # | ----------------------------
@@ -71,12 +71,12 @@ def main():
     engine = Engine(algo, dataClass, zk, sample_size)
 
     # Initial training of model on original training data
-    engine.initialTrain(epochs=10, batch_size=16, val=True, plot=True)
+    engine.initialTrain(epochs=3, batch_size=16, val=True, plot=True)
 
     # Run active learning algo
     # Round is how many times the active learning algo samples
     # cycles is how many epochs the model is retrained each time a round occurs of sampling
-    engine.run(rounds=5, cycles=2, batch_size=16, val=True, plot=True)
+    engine.run(rounds=3, cycles=1, batch_size=16, val=True, plot=True)
 
     # | ----------------------------
     # | Done

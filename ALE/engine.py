@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from math import floor
 from random import shuffle
 from itertools import chain
@@ -87,10 +88,19 @@ class Engine():
         for batch in trange(floor(len(self.dataClass.val_cache) / batch_size)):
             batch_ids = self.dataClass.val_cache[batch_size * batch:batch_size * (batch + 1)]
             X, y = self.dataClass.getBatch(batch_ids)
-            loss, scores = self.modelManager.modelObject.eval(X, y)
+            loss, scores, _ = self.modelManager.modelObject.eval(X, y)
             total_loss.append(loss)
             total_scores.append(scores)
         return total_loss, total_scores
+
+    def evalCache(self, cache, batch_size):
+        predictions = []
+        for batch in trange(floor(len(cache) / batch_size)):
+            batch_ids = cache[batch_size * batch:batch_size * (batch + 1)]
+            X, y = self.dataClass.getBatch(batch_ids)
+            _, _, yh = self.modelManager.modelObject.eval(X, y)
+            predictions.append(yh)
+        return np.concatenate(predictions, axis=0)
 
     def plotLog(self, logs, xlabel, ylabel, title, labels):
         fig, ax = plt.subplots()
@@ -121,7 +131,13 @@ class Engine():
             cache_df = self.dataClass.unlabeled_cache
 
         # Get subset of cache ids based off of active learning algo
-        ids = self.algoClass(cache_df, self.sample_size)
+        if self.algoClass.predict_to_sample == False:
+            ids = self.algoClass(cache_df, self.sample_size)
+        else:
+            # cache_df
+            yh = self.evalCache(cache_df,batch_size)
+            yh = pd.concat([pd.DataFrame(cache_df[:len(yh)]), pd.DataFrame(yh)], axis=1)
+            ids = self.algoClass(cache_df, self.sample_size, yh)
 
         # Manage new labels within caches
         self.dataClass.train_cache.extend(ids)  # Add new ids to train cache
@@ -163,13 +179,12 @@ class Engine():
                 self.val_metric_log["Round_" + str(self.round)] = avg_loss.numpy()
 
                 keys = list(total_scores[0].keys())
-                for i,k in enumerate(keys):
+                for i, k in enumerate(keys):
                     samples = []
-                    for j,sample in enumerate(total_scores):
+                    for j, sample in enumerate(total_scores):
                         samples.append((sample[k]))
                     samples = np.mean(samples)
                     print("{}: {}".format(self.modelManager.modelObject.metrics[i].name, samples))
-
 
             self.round += 1
 
@@ -204,9 +219,9 @@ class Engine():
                 self.intialVal_metric_log["Epoch_" + str(epoch)] = avg_loss.numpy()
 
                 keys = list(total_scores[0].keys())
-                for i,k in enumerate(keys):
+                for i, k in enumerate(keys):
                     samples = []
-                    for j,sample in enumerate(total_scores):
+                    for j, sample in enumerate(total_scores):
                         samples.append((sample[k]))
                     samples = np.mean(samples)
                     print("{}: {}".format(self.modelManager.modelObject.metrics[i].name, samples))
