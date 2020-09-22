@@ -5,9 +5,9 @@ from tensorflow.keras import Sequential
 
 #######################################################
 
-class mnistCNN():
+class ToyA_NN():
     """
-    mnistCNN() Documentation
+    ToyA_NN() Documentation
     --------------------------
 
     Purpose
@@ -28,7 +28,7 @@ class mnistCNN():
 
     def trainBatch(self, inputs, targets):
     Purpose: Update model's weights by passing through inputs to the models and calculating loss
-            against target values. trainBatch() calls another method in mnistCNN() named grad().
+            against target values. trainBatch() calls another method in ToyA_NN() named grad().
             grad() is what calculates the loss and gradient yet, trainBatch() applies the gradient
             to the model to update the weights. Refer to the following link for a general demo
             of how tensorflow allows for custom training: https://www.tensorflow.org/tutorials/customization/
@@ -38,8 +38,8 @@ class mnistCNN():
     __slots__ = ('loss', 'opt', 'metrics', 'input_shape', 'num_classes', 'model')
 
     def __init__(self, loss=None, optimizer=None, metrics=None):
-        self.input_shape = (28, 28, 1)  # tf.keras.layers.Conv2D input shape (batch_size, height, width, channels)
-        self.num_classes = 10
+        self.input_shape = 2
+        self.num_classes = 2
 
         # Loss function for the model, takes loss functions from tf.keras.losses
         if loss == None:
@@ -49,7 +49,7 @@ class mnistCNN():
 
         # Optimizer for the model, takes optimizers from tf.keras.optimizers
         if optimizer == None:
-            self.opt = tf.keras.optimizers.Adam(lr=0.001)
+            self.opt = tf.keras.optimizers.SGD(lr=0.01)
         else:
             self.opt = optimizer
 
@@ -71,15 +71,13 @@ class mnistCNN():
     def loadModel(self) -> tf.keras.Sequential():
         """ Creates tf.keras model and returns it. Change model architecture here """
 
-        model = Sequential(name="mnistCNN")
-        model.add(Conv2D(16, kernel_size=(5, 5), strides=(1, 1),
-                         activation='relu',
-                         input_shape=self.input_shape))
-        model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-        model.add(Conv2D(32, (5, 5), activation='relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-        model.add(Flatten())
-        model.add(Dense(120, activation='relu'))
+        model = Sequential(name="ToyA_NN")
+        model.add(Dense(8, activation='relu', kernel_regularizer=tf.keras.regularizers.l1(0.01),
+                        activity_regularizer=tf.keras.regularizers.l2(0.01), input_dim=self.input_shape))
+        model.add(Dropout(0.2))
+        model.add(Dense(32, kernel_regularizer=tf.keras.regularizers.l1(0.01),
+                        activity_regularizer=tf.keras.regularizers.l2(0.01), activation='relu'))
+        model.add(Dropout(0.2))
         model.add(Dense(self.num_classes, activation='softmax'))
 
         print("-" * 20)
@@ -119,7 +117,6 @@ class mnistCNN():
         loss_value = self.loss(yh, targets)
 
         metric_scores = self.getMetrics(yh, targets)
-
 
         return loss_value, metric_scores
 
