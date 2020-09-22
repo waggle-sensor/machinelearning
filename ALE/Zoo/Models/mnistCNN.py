@@ -117,11 +117,8 @@ class mnistCNN():
         """ Used for predicting with model and checking error when labels are provided """
         yh = self.predict(inputs)
         loss_value = self.loss(yh, targets)
-
         metric_scores = self.getMetrics(yh, targets)
-
-
-        return loss_value, metric_scores
+        return loss_value, metric_scores, yh
 
     def saveModel(self):
         pass
