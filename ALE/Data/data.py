@@ -217,9 +217,6 @@ class ToyALoader(DataManager):
         y = batchData[["y"]].values
         X = batchData.iloc[:, :2].values
 
-        # Reshape input X
-        print(X.shape)
-
         # One hot encode targets y
         y_onehot = np.zeros((y.shape[0], 2))
         for i in range(y_onehot.shape[0]):
