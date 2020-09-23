@@ -1,8 +1,9 @@
-# WL: WaggleLab
+# ALE: Active Learning Exploratorium
 
-WaggleLab is a Python library for testing Active Learning algorithims.
+ALE is a Python library for testing Active Learning algorithims.
 
 ## TODO
+* Implement engine.save_log(path="log.csv")
 * Make acc work for get metric, need to round yh to one hot vector
 * Make util to test model and algo compatibility
 * Add controls for tracking and plotting metrics
@@ -22,16 +23,16 @@ WaggleLab is a Python library for testing Active Learning algorithims.
 
 ## Algos
 * Uniform sampling (i.e., passive learning, serves as baseline)
-
+* Least Confidence
 
  Use the package manager pip to install WL
 ```bash
-pip install wagglelab
+pip install ale
 ```
 
 ## Usage
 ```python
-import wagglelab as wl
+import ale
 ```
 
 ## License

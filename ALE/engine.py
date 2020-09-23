@@ -72,6 +72,38 @@ class Engine():
         if self.dataClass.bins > 1:
             self.multipleBins = True
 
+        self.log = self.getLog()
+        print(self.log)
+
+    def getLog(self):
+        keys = ["round", self.dataClass.dataset_name, self.algoClass.algo_name, self.modelManager.modelName,
+                "time_round_seconds", "batch_size", "n_train", "n_val"]
+
+        # Add col names for unlabeled caches
+        if self.dataClass.bins == 1:
+            temp_col_names = ["u_cache"]
+        else:
+            temp_col_names = ["u_cache_" + str(i) for i in range(self.dataClass.bins)]
+        keys.extend(temp_col_names)
+
+        # Add col names for loss metric
+        temp_col_names = ["loss_train_" + self.modelManager.modelObject.loss.__name__,
+                          "loss_val_" + self.modelManager.modelObject.loss.__name__]
+        keys.extend(temp_col_names)
+
+        # Add col names for extra metrics
+        temp_col_names = ["train_" + metric.name for i, metric in enumerate(self.modelManager.metrics)]
+        keys.extend(temp_col_names)
+        temp_col_names = ["val_" + metric.name for i, metric in enumerate(self.modelManager.metrics)]
+        keys.extend(temp_col_names)
+
+        log = {k: [] for k in keys}
+        return log
+
+    # TODO: update log function, this is going to be a pain [Plan out before coding]
+    def updateLog(self):
+        pass
+
     def trainBatch(self, cycles, batch_size):
         total_loss = []
         for i in range(cycles):
@@ -135,7 +167,7 @@ class Engine():
             ids = self.algoClass(cache_df, self.sample_size)
         else:
             # cache_df
-            yh = self.evalCache(cache_df,batch_size)
+            yh = self.evalCache(cache_df, batch_size)
             yh = pd.concat([pd.DataFrame(cache_df[:len(yh)]), pd.DataFrame(yh)], axis=1)
             ids = self.algoClass(cache_df, self.sample_size, yh)
 

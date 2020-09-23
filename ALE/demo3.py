@@ -69,14 +69,18 @@ def main():
     # Declare engine
     sample_size = 50
     engine = Engine(algo, dataClass, zk, sample_size)
+    input("press enter to continue")
 
     # Initial training of model on original training data
     engine.initialTrain(epochs=3, batch_size=16, val=True, plot=True)
+
+
 
     # Run active learning algo
     # Round is how many times the active learning algo samples
     # cycles is how many epochs the model is retrained each time a round occurs of sampling
     engine.run(rounds=3, cycles=1, batch_size=16, val=True, plot=True)
+    # TODO: Implement engine.save_log(path="log.csv")
 
     # | ----------------------------
     # | Done
