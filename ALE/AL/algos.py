@@ -11,7 +11,8 @@ class alAlgo:
     Currently, the class is very sparse. Will make adjustments as the project continues.
     """
 
-    def __init__(self):
+    def __init__(self, algo_name = "NA"):
+        self.algo_name = algo_name
         self.round = 0
         self.sample_log = {}
 
@@ -57,7 +58,7 @@ class leastConfidence(alAlgo):
     """
 
     def __init__(self):
-        super().__init__()
+        super().__init__(algo_name="Least Confidence")
         self.sample_log = {}
         self.predict_to_sample = True
 
@@ -114,7 +115,7 @@ class uniformSample(alAlgo):
     """
 
     def __init__(self):
-        super().__init__()
+        super().__init__(algo_name="Passive")
         self.sample_log = {}
         self.predict_to_sample = False
 
