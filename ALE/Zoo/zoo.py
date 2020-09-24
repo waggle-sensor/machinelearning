@@ -4,8 +4,7 @@ from importlib import import_module
 #######################################################
 
 class zooKeeper():
-    def __init__(self, dataName, modelName, show_model=False, loss=None, optimizer=None, metrics=None):
-        self.dataName = dataName
+    def __init__(self, modelName, show_model=False, loss=None, optimizer=None, metrics=None):
         self.modelName = modelName
 
         self.loss = loss
