@@ -3,6 +3,7 @@
 ALE is a Python library for testing Active Learning algorithims.
 
 ## TODO
+* Implement inheritance over custom classes to ensure user safety
 * Implement engine.save_log(path="log.csv")
 * Make acc work for get metric, need to round yh to one hot vector
 * Make util to test model and algo compatibility

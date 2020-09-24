@@ -36,16 +36,13 @@ def main():
     # | ---------------------------
 
     # DataManager parameters
-    dataName = "ToyA"
     split = (.05, .05, .9)  # (train, val, unlabeled)
     bins = 3
-    keep_bins = True
+    keep_bins = False
 
-    dataClass = DataManager(dataName)  # Declare data manager class
-    dataClass.parseData(split, bins, keep_bins)  # Parse MNIST data to custom split and rounds
-    dataClass = ToyALoader(bins, keep_bins)  # Reload custom dataClass for MNIST with new custom split and rounds
-
-    # X, y = dataClass.getBatch(list(range(0,10)))
+    dataClass = ToyALoader(bins, keep_bins)  # Declare data manager class
+    dataClass.parseData(split, bins, keep_bins)
+    dataClass.loadCaches()
 
     # | ----------------------------
     # | 2. Select Active Learning algorithm
@@ -60,7 +57,7 @@ def main():
 
     modelName = "ToyA_NN"  # Pick pre-made model
     metrics = [tf.keras.metrics.MeanSquaredError(), tf.keras.metrics.KLDivergence()]
-    zk = zoo.zooKeeper(dataName, modelName, show_model=True, metrics=metrics)  # Load model and compile
+    zk = zoo.zooKeeper(modelName, show_model=True, metrics=metrics)  # Load model and compile
 
     # | ----------------------------
     # | 4. Run algorithm and log results
@@ -74,19 +71,18 @@ def main():
     # Initial training of model on original training data
     engine.initialTrain(epochs=3, batch_size=16, val=True, plot=True)
 
-
-
     # Run active learning algo
     # Round is how many times the active learning algo samples
     # cycles is how many epochs the model is retrained each time a round occurs of sampling
     engine.run(rounds=3, cycles=1, batch_size=16, val=True, plot=True)
+    dataClass.deleteCache()
     # TODO: Implement engine.save_log(path="log.csv")
 
     # | ----------------------------
     # | Done
     # | ----------------------------
 
-    print("Finshed running")
+    print("Finished running")
 
 
 if __name__ == "__main__":

@@ -175,10 +175,12 @@ class Engine():
         self.dataClass.train_cache.extend(ids)  # Add new ids to train cache
 
         shuffle(self.dataClass.train_cache)  # Shuffle new dataClass.train_cache
-        if self.dataClass.keep_bins == True and self.dataClass.bins > 1:  # Remove new ids from unlabeled caches: (two cases) one or multiple unlabled caches
+
+        # Remove new ids from unlabeled caches: (two cases) one or multiple unlabeled caches
+        if self.dataClass.keep_bins == True and self.dataClass.bins > 1:
             for i in range(self.round, self.dataClass.bins):
                 [self.dataClass.unlabeled_cache[i].remove(id) for id in ids]
-        else:
+        elif self.dataClass.bins == 1:
             [self.dataClass.unlabeled_cache.remove(id) for id in ids]
 
         # ------------------------------------
