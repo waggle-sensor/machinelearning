@@ -37,7 +37,7 @@ def main():
 
     # DataManager parameters
     split = (.05, .05, .9)  # (train, val, unlabeled)
-    bins = 3
+    bins = 1
     keep_bins = False
 
     dataClass = ToyALoader(bins, keep_bins)  # Declare data manager class
@@ -75,8 +75,8 @@ def main():
     # Round is how many times the active learning algo samples
     # cycles is how many epochs the model is retrained each time a round occurs of sampling
     engine.run(rounds=3, cycles=1, batch_size=16, val=True, plot=True)
+    engine.saveLog(path="test_log.csv")
     dataClass.deleteCache()
-    # TODO: Implement engine.save_log(path="log.csv")
 
     # | ----------------------------
     # | Done

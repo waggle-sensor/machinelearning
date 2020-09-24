@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import time
 from math import floor
 from random import shuffle
 from itertools import chain
@@ -72,12 +73,11 @@ class Engine():
         if self.dataClass.bins > 1:
             self.multipleBins = True
 
-        self.log = self.getLog()
-        print(self.log)
+        self.log = self.getLog()  # Make log to track active learning
 
     def getLog(self):
-        keys = ["round", self.dataClass.dataset_name, self.algoClass.algo_name, self.modelManager.modelName,
-                "time_round_seconds", "batch_size", "n_train", "n_val"]
+        keys = ["round", "data_set", "algo", "model",
+                "time_round", "batch_size", "n_train", "n_val"]
 
         # Add col names for unlabeled caches
         if self.dataClass.bins == 1:
@@ -101,8 +101,75 @@ class Engine():
         return log
 
     # TODO: update log function, this is going to be a pain [Plan out before coding]
-    def updateLog(self):
-        pass
+    def updateLog(self, round=None, time_round=None, batch_size=None, train_loss=None, val_loss=None,
+                  train_metrics=None, val_metrics=None):
+        # Add round to log
+        if round == None:
+            self.log["round"].append("NA")
+        else:
+            self.log["round"].append(round)
+
+        # Add time to run round to log
+        if time_round == None:
+            self.log["time_round"].append("NA")
+        else:
+            self.log["time_round"].append(time_round)
+
+            # Add name of data set to log
+        self.log["data_set"].append(self.dataClass.dataset_name)
+
+        # Add active learning algo name to log
+        self.log["algo"].append(self.algoClass.algo_name)
+
+        # Add model name to log
+        self.log["model"].append(self.modelManager.modelName)
+
+        # Add batch size to log
+        if batch_size == None:
+            self.log["batch_size"].append("NA")
+        else:
+            self.log["batch_size"].append(batch_size)
+
+            # Add number of samples in train cache
+        self.log["n_train"].append(len(self.dataClass.train_cache))
+
+        # Add number of samples in val cache
+        self.log["n_val"].append(len(self.dataClass.val_cache))
+
+        # Add number of samples in unlabeled caches
+        if self.dataClass.bins > 1:
+            for i, sub_list in enumerate(self.dataClass.unlabeled_cache):
+                self.log["u_cache_" + str(i)].append(len(sub_list))
+        else:
+            self.log["u_cache"].append(len(self.dataClass.unlabeled_cache))
+
+        # Add loss of train to log
+        if train_loss == None:
+            self.log["loss_train_" + self.modelManager.modelObject.loss.__name__].append("NA")
+        else:
+            self.log["loss_train_" + self.modelManager.modelObject.loss.__name__].append(train_loss)
+
+            # Add loss of val to log
+        if val_loss == None:
+            self.log["loss_val_" + self.modelManager.modelObject.loss.__name__].append("NA")
+        else:
+            self.log["loss_val_" + self.modelManager.modelObject.loss.__name__].append(val_loss)
+
+        # Add train metrics
+        if train_metrics == None:
+            for i, metric in enumerate(self.modelManager.modelObject.metrics):
+                self.log["train_" + metric.name].append('NA')
+        else:
+            for i, metric in enumerate(self.modelManager.modelObject.metrics):
+                self.log["train_" + metric.name].append(train_metrics[i])
+
+        # Add val metrics
+        if val_metrics == None:
+            for i, metric in enumerate(self.modelManager.modelObject.metrics):
+                self.log["val_" + metric.name].append('NA')
+        else:
+            for i, metric in enumerate(self.modelManager.modelObject.metrics):
+                self.log["val_" + metric.name].append(val_metrics[i])
 
     def trainBatch(self, cycles, batch_size):
         total_loss = []
@@ -133,6 +200,10 @@ class Engine():
             _, _, yh = self.modelManager.modelObject.eval(X, y)
             predictions.append(yh)
         return np.concatenate(predictions, axis=0)
+
+    def saveLog(self, path):
+        log_df = pd.DataFrame(self.log)
+        log_df.to_csv(path)
 
     def plotLog(self, logs, xlabel, ylabel, title, labels):
         fig, ax = plt.subplots()
@@ -177,9 +248,12 @@ class Engine():
         shuffle(self.dataClass.train_cache)  # Shuffle new dataClass.train_cache
 
         # Remove new ids from unlabeled caches: (two cases) one or multiple unlabeled caches
-        if self.dataClass.keep_bins == True and self.dataClass.bins > 1:
+        if self.dataClass.bins > 1:
             for i in range(self.round, self.dataClass.bins):
-                [self.dataClass.unlabeled_cache[i].remove(id) for id in ids]
+                for id in ids:
+                    if id in self.dataClass.unlabeled_cache[i]:
+                        self.dataClass.unlabeled_cache[i].remove(id)
+                # [if id in self.dataClass.unlabeled_cache[i].remove(id) for id in ids]
         elif self.dataClass.bins == 1:
             [self.dataClass.unlabeled_cache.remove(id) for id in ids]
 
@@ -201,24 +275,31 @@ class Engine():
 
         print("\n" + "Active Learning algorithm start:")
 
-        for i in range(rounds):
-            print("Round: {}".format(i))
+        for n in range(rounds):
+            start_time = time.time()
+            print("Round: {}".format(n))
             self.runCycle(batch_size, cycles)
 
             if val == True:
                 total_loss, total_scores = self.valTest(batch_size)
                 total_loss = list(chain(*total_loss))
-                avg_loss = sum(total_loss) / len(total_loss)
-                print("{}. Val loss: {}".format(self.round, avg_loss))
-                self.val_metric_log["Round_" + str(self.round)] = avg_loss.numpy()
+                val_avg_loss = sum(total_loss) / len(total_loss)
+                print("{}. Val loss: {}".format(self.round, val_avg_loss))
+                self.val_metric_log["Round_" + str(self.round)] = val_avg_loss.numpy()
 
                 keys = list(total_scores[0].keys())
+                val_metrics = []
                 for i, k in enumerate(keys):
                     samples = []
                     for j, sample in enumerate(total_scores):
                         samples.append((sample[k]))
                     samples = np.mean(samples)
+                    val_metrics.append(samples)
                     print("{}: {}".format(self.modelManager.modelObject.metrics[i].name, samples))
+
+            time_round = time.time() - start_time
+            self.updateLog(round="round_" + str(n), time_round=time_round, batch_size=batch_size,
+                           val_loss=val_avg_loss.numpy(), val_metrics=val_metrics)
 
             self.round += 1
 
@@ -238,27 +319,35 @@ class Engine():
     def initialTrain(self, epochs, batch_size, val=True, plot=False):
         print("\n" + "Training model on training cache:")
         for epoch in range(epochs):
+            start_time = time.time()
+
             total_loss = self.trainBatch(1, batch_size)
             total_loss = list(chain(*total_loss))
-            avg_loss = sum(total_loss) / len(total_loss)
-            print("{}. training average loss: {}".format(epoch, avg_loss))
-            self.intialTrain_metric_log["Epoch_" + str(epoch)] = avg_loss.numpy()
+            train_avg_loss = sum(total_loss) / len(total_loss)
+            print("{}. training average loss: {}".format(epoch, train_avg_loss))
+            self.intialTrain_metric_log["Epoch_" + str(epoch)] = train_avg_loss.numpy()
 
             if val == True:
                 total_loss, total_scores = self.valTest(batch_size)
 
                 total_loss = list(chain(*total_loss))
-                avg_loss = sum(total_loss) / len(total_loss)
-                print("{}. Val loss: {}".format(self.round, avg_loss))
-                self.intialVal_metric_log["Epoch_" + str(epoch)] = avg_loss.numpy()
+                val_avg_loss = sum(total_loss) / len(total_loss)
+                print("{}. Val loss: {}".format(self.round, val_avg_loss))
+                self.intialVal_metric_log["Epoch_" + str(epoch)] = val_avg_loss.numpy()
 
                 keys = list(total_scores[0].keys())
+                val_metrics = []
                 for i, k in enumerate(keys):
                     samples = []
                     for j, sample in enumerate(total_scores):
                         samples.append((sample[k]))
                     samples = np.mean(samples)
+                    val_metrics.append(samples)
                     print("{}: {}".format(self.modelManager.modelObject.metrics[i].name, samples))
+
+            time_round = time.time() - start_time
+            self.updateLog(round="train_" + str(epoch), time_round=time_round, batch_size=batch_size,
+                           train_loss=train_avg_loss.numpy(), val_loss=val_avg_loss.numpy(), val_metrics=val_metrics)
 
         print('Finished initial training of model.')
 
