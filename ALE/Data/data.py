@@ -1,3 +1,4 @@
+# Import modules
 import os
 import abc
 import shutil
@@ -300,8 +301,6 @@ class DataManager(metaclass=abc.ABCMeta):
         os.remove(self.data_path + "/val_cache_" + ".csv")
 
 
-
-
 #######################################################
 
 class CustomGenerator(DataManager):
@@ -346,8 +345,6 @@ class ToyALoader(DataManager):
 
     def __init__(self, bins=1, keep_bins=False):
         super().__init__("ToyA", bins, keep_bins)
-
-        # self.loadCaches()
 
         # For this data set, it is possible to read in all data at one
         self.data_df = pd.read_csv(self.data_path + "/raw_data/toyA.csv", iterator=True, chunksize=5000)
@@ -421,8 +418,6 @@ class mnistLoader(DataManager):
 
     def __init__(self, bins=1, keep_bins=False):
         super().__init__("MNIST", bins, keep_bins)
-
-        self.loadCaches()
 
         # For this data set, it is possible to read in all data at one
         self.data_df = pd.read_csv(self.data_path + "/raw_data/mnist.csv", iterator=True, chunksize=5000)
