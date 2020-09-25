@@ -1,3 +1,4 @@
+# Import modules
 import numpy as np
 import pandas as pd
 import time
@@ -13,6 +14,8 @@ import matplotlib.pyplot as plt
 def testCallEngine():
     print("Called test function from ~/engine.py")
 
+
+#######################################################
 
 class Engine():
     """
@@ -36,7 +39,14 @@ class Engine():
     Methods
     -------
     trainBatch(self, cycles, batch_size):
-        Used to call zooKeeper to peform training of tf model
+        Used to call zooKeeper to perform training of tf model
+
+    getLog(self):
+        Creates dictionary to keep track of performance metrics
+
+    updateLog(self, round=None, time_round=None, batch_size=None, train_loss=None, val_loss=None,
+                  train_metrics=None, val_metrics=None):
+        Updates metrics at end of each iteration within initialTrain() and run()
 
     initialTrain(self, epochs, batch_size, val=True, plot=False:
         Used to train tf model from zooKeeper on initially provided training data
@@ -52,6 +62,27 @@ class Engine():
         method which is what calls for data, model update, and update cache. If you wanted to
         have very very very precise control of what happens between training rounds, modify code here.
         Warning it is very intricate and could easily break the code, do so at your own risk.
+
+    runCycle(self, batch_size, cycles):
+        Subroutine for run where model is trained on batch from algo, metrics logged, and caches updated
+
+    trainBatch(self, cycles, batch_size):
+        Used to train model to update weights.
+
+    valTest(self, batch_size):
+        Call model and get metrics of prediction.
+
+    evalCache(self, cache, batch_size):
+        Calls model and performs prediction and returns predictions.
+
+    saveLog(self, path):
+        Save log of type dict to a csv
+
+    plotLog(self, logs, xlabel, ylabel, title, labels):
+        Plots loss on validation data after train and active learning
+
+    initialTrain(self, epochs, batch_size, val=True, plot=False):
+        Trains model on data present in train cache
 
     """
 
@@ -76,6 +107,7 @@ class Engine():
         self.log = self.getLog()  # Make log to track active learning
 
     def getLog(self):
+        """ Builds dictionary with proper keys matching to metrics being tracked """
         keys = ["round", "data_set", "algo", "model",
                 "time_round", "batch_size", "n_train", "n_val"]
 
@@ -100,9 +132,9 @@ class Engine():
         log = {k: [] for k in keys}
         return log
 
-    # TODO: update log function, this is going to be a pain [Plan out before coding]
     def updateLog(self, round=None, time_round=None, batch_size=None, train_loss=None, val_loss=None,
                   train_metrics=None, val_metrics=None):
+        """ Updates metrics within log """
         # Add round to log
         if round == None:
             self.log["round"].append("NA")
@@ -115,7 +147,7 @@ class Engine():
         else:
             self.log["time_round"].append(time_round)
 
-            # Add name of data set to log
+        # Add name of data set to log
         self.log["data_set"].append(self.dataClass.dataset_name)
 
         # Add active learning algo name to log
@@ -172,6 +204,7 @@ class Engine():
                 self.log["val_" + metric.name].append(val_metrics[i])
 
     def trainBatch(self, cycles, batch_size):
+        """ Calls model to predict, gets error, apply gradients to update weights """
         total_loss = []
         for i in range(cycles):
             for batch in trange(floor(len(self.dataClass.train_cache) / batch_size)):
@@ -182,6 +215,7 @@ class Engine():
         return total_loss
 
     def valTest(self, batch_size):
+        """ Call model, get metrics of prediction """
         total_loss = []
         total_scores = []
         for batch in trange(floor(len(self.dataClass.val_cache) / batch_size)):
@@ -193,6 +227,7 @@ class Engine():
         return total_loss, total_scores
 
     def evalCache(self, cache, batch_size):
+        """ Calls model and performs prediction and returns predictions """
         predictions = []
         for batch in trange(floor(len(cache) / batch_size)):
             batch_ids = cache[batch_size * batch:batch_size * (batch + 1)]
@@ -202,10 +237,12 @@ class Engine():
         return np.concatenate(predictions, axis=0)
 
     def saveLog(self, path):
+        """ Save log of type dict to a csv """
         log_df = pd.DataFrame(self.log)
         log_df.to_csv(path)
 
     def plotLog(self, logs, xlabel, ylabel, title, labels):
+        """ Plots loss on validation data after train and active learning """
         fig, ax = plt.subplots()
         for i, log in enumerate(logs):
             ax.scatter(list(range(len(log))), list(log.values()), label=labels[i])
@@ -218,6 +255,7 @@ class Engine():
         plt.show()
 
     def runCycle(self, batch_size, cycles):
+        """ Subroutine for run where model is trained on batch from algo, metrics logged, and caches updated """
         # ------------------------------------
         # 1. Get data and update caches
         # ------------------------------------
@@ -303,6 +341,7 @@ class Engine():
 
             self.round += 1
 
+        # Logic to plot loss from active learning round
         if plot == True:
             xlabel = "Round"
             ylabel = "Error"
@@ -317,6 +356,7 @@ class Engine():
         print("\n" + "Active Learning algorithm done.")
 
     def initialTrain(self, epochs, batch_size, val=True, plot=False):
+        """ Trains model on data present in train cache """
         print("\n" + "Training model on training cache:")
         for epoch in range(epochs):
             start_time = time.time()
@@ -351,6 +391,7 @@ class Engine():
 
         print('Finished initial training of model.')
 
+        # Logic to plot loss from initial training
         if plot == True:
             xlabel = "Epoch"
             ylabel = "Error"

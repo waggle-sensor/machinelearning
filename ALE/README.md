@@ -11,6 +11,8 @@ ALE is a Python library for testing Active Learning algorithims.
 * Dynamically show changes in cache size to debug if 
   cache is removing and adding data correctly ** saved in log, just need to display
 * Improve UI
+* In engine class, clean trainBatch, valTest, and evalCache.
+* Fix train, val, eval to use remainder of data in last batch
 
 ## DONE
 * Added ToyA dataset and ToyA_NN model
