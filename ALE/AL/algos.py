@@ -1,3 +1,4 @@
+import abc
 import random
 import numpy as np
 import pandas as pd
@@ -5,49 +6,32 @@ import pandas as pd
 
 #######################################################
 
-class alAlgo:
+class alAlgo(metaclass=abc.ABCMeta):
     """
     Parent class that will be used for making new Active Learning algo classes.
     Currently, the class is very sparse. Will make adjustments as the project continues.
     """
 
-    def __init__(self, algo_name = "NA"):
+    def __init__(self, algo_name="NA"):
         self.algo_name = algo_name
         self.round = 0
         self.sample_log = {}
+        self.predict_to_sample = False
+
+    @classmethod
+    def __subclasshook__(cls, subclass):
+        return (hasattr(subclass, '__call__') and
+                callable(subclass.__call__) or
+                NotImplemented)
 
     def reset(self):
         self.round = 0
         self.sample_log = {}
 
-
-#######################################################
-
-"""
-
-# Example of a child class of alAlgo.
-# Use as template to make new Active Learning Algorithms
-
-class child_alAlgo(alAlgo):
-
-    def __init__(self):
-        super().__init__()
-        self.dummy = None
-
-    def __call__(self, cache: list, n: int, **data) -> list:
-        
-        # Custom methodology to select batch
-        batch = F(cache, a, b, c)
-
-        # Log which samples were used for that round
-        self.sample_log[str(self.round)] = batch
-
-        # Increment round
-        self.round += 1
-
-        return batch
-
-"""
+    @abc.abstractmethod
+    def __call__(self, cache: list, n: int, yh):
+        """ Selects which samples to get labels for """
+        raise NotImplementedError
 
 
 #######################################################
@@ -59,7 +43,6 @@ class leastConfidence(alAlgo):
 
     def __init__(self):
         super().__init__(algo_name="Least Confidence")
-        self.sample_log = {}
         self.predict_to_sample = True
 
     def __call__(self, cache: list, n: int, yh) -> list:
@@ -111,12 +94,10 @@ class uniformSample(alAlgo):
     """
     Randomly samples over a uniform distribution of passed cache of data ids.
     Use as a baseline to compare the performance of your active learning algorithms.
-
     """
 
     def __init__(self):
         super().__init__(algo_name="Passive")
-        self.sample_log = {}
         self.predict_to_sample = False
 
     def __call__(self, cache: list, n: int, yh) -> list:
