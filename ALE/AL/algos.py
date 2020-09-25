@@ -1,3 +1,4 @@
+# Import modules
 import abc
 import random
 import numpy as np
@@ -8,8 +9,41 @@ import pandas as pd
 
 class alAlgo(metaclass=abc.ABCMeta):
     """
+    alAlgo() Documentation:
+    --------------------------
+
+    Purpose
+    ----------
     Parent class that will be used for making new Active Learning algo classes.
     Currently, the class is very sparse. Will make adjustments as the project continues.
+
+    Attributes
+    ----------
+    algo_name : str
+        used to keep track of name of algo in engine.log
+
+    sample_log : dict
+        tracks what samples are chosen each round, places sample ids in list within dict
+
+    round : int
+        tracks what round algo is on
+
+    predict_to_sample : bool
+        bool that determines whether or not the algo needs the predictions of the model to choose which samples to label
+
+    Methods
+    -------
+    @classmethod
+    __subclasshook__(cls, subclass):
+        Used to check if custom child class of alAlgo is properly made
+
+    reset(self):
+        set round=0 and sample_log={}
+
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
     """
 
     def __init__(self, algo_name="NA"):
@@ -38,7 +72,25 @@ class alAlgo(metaclass=abc.ABCMeta):
 
 class leastConfidence(alAlgo):
     """
+    leastConfidence(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Custom active learning class, inherits alAlgo class.
     Score samples by predictions through formula LC(x)=(1-P(y*|x))*(n/(n-1))
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
     """
 
     def __init__(self):
@@ -92,8 +144,26 @@ class leastConfidence(alAlgo):
 
 class uniformSample(alAlgo):
     """
+    leastConfidence(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Custom active learning class, inherits alAlgo class.
     Randomly samples over a uniform distribution of passed cache of data ids.
     Use as a baseline to compare the performance of your active learning algorithms.
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
     """
 
     def __init__(self):
