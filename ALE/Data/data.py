@@ -1,4 +1,5 @@
 import os
+import abc
 import shutil
 import pandas as pd
 import numpy as np
@@ -32,7 +33,7 @@ def load_data_py():
 
 #######################################################
 
-class DataManager:
+class DataManager(metaclass=abc.ABCMeta):
     """
     DataManger Documentation:
     --------------------------
@@ -121,6 +122,17 @@ class DataManager:
         self.train_cache = []  # Keeps track of what the model is allowed to see during training
         self.val_cache = []  # Keep track of what data to use for validation
         self.unlabeled_cache = []  # Keep tracks of what data can't be used for training since unlabled
+
+    @classmethod
+    def __subclasshook__(cls, subclass):
+        return (hasattr(subclass, 'getBatch') and
+                callable(subclass.getBatch) or
+                NotImplemented)
+
+    @abc.abstractmethod
+    def getBatch(self, cache_ids: list):
+        """ Load data and pre-process (reshape, scale, etc) for the model """
+        raise NotImplementedError
 
     def clearCache(self):
         """ Resets values in caches """
@@ -288,6 +300,8 @@ class DataManager:
         os.remove(self.data_path + "/val_cache_" + ".csv")
 
 
+
+
 #######################################################
 
 class CustomGenerator(DataManager):
@@ -339,6 +353,7 @@ class ToyALoader(DataManager):
         self.data_df = pd.read_csv(self.data_path + "/raw_data/toyA.csv", iterator=True, chunksize=5000)
         self.data_df = pd.concat(self.data_df, ignore_index=True)
 
+
     def getBatch(self, cache_ids: list):
         """
         Purpose
@@ -356,7 +371,7 @@ class ToyALoader(DataManager):
             Input values for model
         y : Target values for model
 
-        """
+       """
 
         # Select data based off of passed cache_ids
         batchData = self.data_df.loc[self.data_df['ID'].isin(cache_ids)]
