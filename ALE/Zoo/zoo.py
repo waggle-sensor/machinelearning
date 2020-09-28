@@ -24,8 +24,6 @@ class zooKeeper():
             print("Found model {}".format(self.modelName))
             print("-" * 20)
 
-            # TODO: make logic for if it is a pre-built class or not
-            #modelClass = getattr(import_module("Zoo.Models." + self.modelName), self.modelName)
             modelClass = getattr(import_module("Zoo." + self.modelName), self.modelName)
             self.modelObject = modelClass(loss=self.loss, optimizer=self.optimizer, metrics=self.metrics)
 
