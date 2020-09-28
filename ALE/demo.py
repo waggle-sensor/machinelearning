@@ -36,7 +36,7 @@ def main():
     # | ---------------------------
 
     # DataManager parameters
-    split = (.1, .1, .8)  # (train, val, unlabeled)
+    split = (.4, .2, .4)  # (train, val, unlabeled)
     bins = 1
     keep_bins = False
 
@@ -56,7 +56,7 @@ def main():
     # | ----------------------------
 
     modelName = "ToyA_NN"  # Pick pre-made model
-    metrics = [tf.keras.metrics.MeanSquaredError(), tf.keras.metrics.KLDivergence()]
+    metrics = [tf.keras.metrics.Accuracy(), tf.keras.metrics.KLDivergence()]
     zk = zoo.zooKeeper(modelName, show_model=True, metrics=metrics)  # Load model and compile
 
     # | ----------------------------
@@ -64,17 +64,17 @@ def main():
     # | ----------------------------
 
     # Declare engine
-    sample_size = 50
+    sample_size = 100
     engine = Engine(algo, dataClass, zk, sample_size)
     input("press enter to continue")
 
     # Initial training of model on original training data
-    engine.initialTrain(epochs=2, batch_size=32, val=True, plot=True)
+    engine.initialTrain(epochs=30, batch_size=32, val=True, plot=True)
 
     # Run active learning algo
     # Round is how many times the active learning algo samples
     # cycles is how many epochs the model is retrained each time a round occurs of sampling
-    engine.run(rounds=2, cycles=1, batch_size=32, val=True, plot=True)
+    engine.run(rounds=2, cycles=3, batch_size=32, val=True, plot=True)
     engine.saveLog(path="test_log.csv")
     dataClass.deleteCache()
 
