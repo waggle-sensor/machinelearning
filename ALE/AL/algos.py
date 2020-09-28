@@ -144,7 +144,7 @@ class leastConfidence(alAlgo):
 
 class uniformSample(alAlgo):
     """
-    leastConfidence(alAlgo) Documentation:
+    uniformSample(alAlgo) Documentation:
     --------------------------
 
     Purpose
@@ -191,6 +191,83 @@ class uniformSample(alAlgo):
 
         print("\n")
         print("Round {} selected samples: {}".format(self.round, idx))
+        print("\n")
+
+        # Increment round
+        self.round += 1
+
+        return batch
+
+
+#######################################################
+
+
+class ratioConfidence(alAlgo):
+    """
+    ratioConfidence(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Custom active learning class, inherits alAlgo class.
+    Score samples by predictions through formula theta(x)=P(y_1/x)/P(y_2/x)
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
+    """
+
+    def __init__(self):
+        super().__init__(algo_name="Ratio Confidence")
+        self.predict_to_sample = True
+
+    def __call__(self, cache: list, n: int, yh) -> list:
+
+        # Check if embedded cache, then cache is available for the round
+        if any(isinstance(i, list) for i in cache):
+            try:
+                cache = cache[self.round]
+            except:
+                raise ValueError("Active Learning Algo has iterated through each round\'s unlabled cache.")
+
+        # Check if sample size is to large for cache
+        if len(cache) < n:
+            raise ValueError("Sample size n is larger than length of round's cache")
+
+        # Calculate LC(x) values
+        yh_vals = yh.iloc[:, 1:].values
+        RC_vals = []
+        for i in range(yh_vals.shape[0]):
+            sample = yh_vals[i, :]
+            sample[::-1].sort()
+            y1, y2 = sample[0], sample[1]
+            if y2 == 0:
+                RC_vals.append(100)
+            else:
+                RC_vals.append(y1/y2)
+
+        target_col_names = ["y" + str(i) for i in range(yh_vals.shape[1])]
+        yh_col_names = ["RC", "ID"] + target_col_names
+        yh = pd.concat([pd.DataFrame(RC_vals), yh], axis=1)
+        yh.columns = yh_col_names
+
+        # Get ids of n largest LC vals
+        n_smallest = yh.nsmallest(n, 'RC')
+        batch = n_smallest["ID"].to_list()
+
+        # Log which samples were used for that round
+        self.sample_log[str(self.round)] = batch
+
+        print("\n")
+        print("Round {} selected samples: {}".format(self.round, batch))
         print("\n")
 
         # Increment round
