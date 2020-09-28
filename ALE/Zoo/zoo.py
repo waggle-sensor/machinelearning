@@ -85,7 +85,13 @@ class customModel(metaclass=abc.ABCMeta):
         scores = {}
         for i, metric in enumerate(self.metrics):
             metric.reset_states()
-            metric.update_state(yh, targets)
+            # Special case if metric is accuracy since need to round to one-hot on prediction
+            if metric.name == 'accuracy':
+                targets_hot = tf.where(tf.equal(tf.reduce_max(targets, axis=1,keepdims=True), targets),
+                                       tf.constant(1, shape=targets.shape),tf.constant(0, shape=targets.shape))
+                metric.update_state(yh, targets_hot)
+            else:
+                metric.update_state(yh, targets)
             scores[metric.name] = metric.result().numpy()
             metric.reset_states()
         return scores
