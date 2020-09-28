@@ -3,21 +3,18 @@
 ALE is a Python library for testing Active Learning algorithims.
 
 ## TODO
-* Implement inheritance over custom classes to ensure user safety
-    ** model class
-* Make acc work for get metric, need to round yh to one hot vector
-* Make util to test model and algo compatibility
-* Add controls for tracking and plotting metrics
-* Dynamically show changes in cache size to debug if 
-  cache is removing and adding data correctly ** saved in log, just need to display
 * Improve UI
-* In engine class, clean trainBatch, valTest, and evalCache.
 * Fix train, val, eval to use remainder of data in last batch
 
 ## DONE
 * Added ToyA dataset and ToyA_NN model
 * Implement engine.save_log(path="log.csv")
 * Add controls for saving performance and configuration
+* Dynamically show changes in cache size to debug if 
+  cache is removing and adding data correctly ** saved in log, just need to display
+* Make util to test model and algo compatibility
+* Implement inheritance over custom classes to ensure user safety
+* Make acc work for get metric, need to round yh to one hot vector
 
 ## DataSets
 * MNIST
@@ -30,6 +27,7 @@ ALE is a Python library for testing Active Learning algorithims.
 ## Algos
 * Uniform sampling (i.e., passive learning, serves as baseline)
 * Least Confidence
+* Ratio Confidence
 
  Use the package manager pip to install WL
 ```bash
