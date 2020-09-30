@@ -205,35 +205,69 @@ class Engine():
 
     def trainBatch(self, cycles, batch_size):
         """ Calls model to predict, gets error, apply gradients to update weights """
+        remainder_samples = len(self.dataClass.train_cache) % batch_size # Calculate number of remainder samples from batches
         total_loss = []
+
+        # Run batches
         for i in range(cycles):
             for batch in trange(floor(len(self.dataClass.train_cache) / batch_size)):
                 batch_ids = self.dataClass.train_cache[batch_size * batch:batch_size * (batch + 1)]
                 X, y = self.dataClass.getBatch(batch_ids)
                 loss = self.modelManager.modelObject.trainBatch(X, y)
                 total_loss.append(loss)
+
+         # Run remainders
+        if remainder_samples > 0:
+            batch_ids = self.dataClass.train_cache[(-1)*remainder_samples:]
+            X, y = self.dataClass.getBatch(batch_ids)
+            loss = self.modelManager.modelObject.trainBatch(X, y)
+            total_loss.append(loss)
+
         return total_loss
 
     def valTest(self, batch_size):
         """ Call model, get metrics of prediction """
+        remainder_samples = len(self.dataClass.val_cache) % batch_size  # Calculate number of remainder samples from batches
         total_loss = []
         total_scores = []
+
+        # Run batches
         for batch in trange(floor(len(self.dataClass.val_cache) / batch_size)):
             batch_ids = self.dataClass.val_cache[batch_size * batch:batch_size * (batch + 1)]
             X, y = self.dataClass.getBatch(batch_ids)
             loss, scores, _ = self.modelManager.modelObject.eval(X, y)
             total_loss.append(loss)
             total_scores.append(scores)
+
+        # Run remainders
+        if remainder_samples > 0:
+            batch_ids = self.dataClass.val_cache[(-1)*remainder_samples:]
+            X, y = self.dataClass.getBatch(batch_ids)
+            loss, scores, _ = self.modelManager.modelObject.eval(X, y)
+            total_loss.append(loss)
+            total_scores.append(scores)
+
         return total_loss, total_scores
 
     def evalCache(self, cache, batch_size):
         """ Calls model and performs prediction and returns predictions """
+        remainder_samples = len(cache) % batch_size  # Calculate number of remainder samples from batches
         predictions = []
+
+        # Run batches
         for batch in trange(floor(len(cache) / batch_size)):
             batch_ids = cache[batch_size * batch:batch_size * (batch + 1)]
             X, y = self.dataClass.getBatch(batch_ids)
             _, _, yh = self.modelManager.modelObject.eval(X, y)
             predictions.append(yh)
+
+        # Run remainders
+        if remainder_samples > 0:
+            batch_ids = cache[(-1)*remainder_samples:]
+            X, y = self.dataClass.getBatch(batch_ids)
+            _, _, yh = self.modelManager.modelObject.eval(X, y)
+            predictions.append(yh)
+
         return np.concatenate(predictions, axis=0)
 
     def saveLog(self, path):
@@ -261,7 +295,7 @@ class Engine():
         # ------------------------------------
 
         # Get round unlabeled cache ids
-        print("Active Learning training round: {}".format(self.round))
+        #print("Active Learning training round: {}".format(self.round))
 
         if self.dataClass.bins > 1:
             if self.round >= self.dataClass.bins:
@@ -311,10 +345,14 @@ class Engine():
         :return: None
         """
 
-        print("\n" + "Active Learning algorithm start:")
+        print("\n")
+        print("-" * 20)
+        print("Starting active learning")
+        print("-" * 20)
 
         for n in range(rounds):
             start_time = time.time()
+            print("\n")
             print("Round: {}".format(n))
             self.runCycle(batch_size, cycles)
 
@@ -353,18 +391,21 @@ class Engine():
                 self.plotLog([self.train_metric_log], xlabel, ylabel, title, "Train")
             input('press return to continue' + "\n")
 
-        print("\n" + "Active Learning algorithm done.")
+        print("\n" + "Active Learning done")
 
     def initialTrain(self, epochs, batch_size, val=True, plot=False):
         """ Trains model on data present in train cache """
-        print("\n" + "Training model on training cache:")
+        print("\n")
+        print("-" * 20)
+        print("Training model on training cache")
+        print("-" * 20)
         for epoch in range(epochs):
             start_time = time.time()
 
             total_loss = self.trainBatch(1, batch_size)
             total_loss = list(chain(*total_loss))
             train_avg_loss = sum(total_loss) / len(total_loss)
-            print("{}. training average loss: {}".format(epoch, train_avg_loss))
+            print("Epoch {}. training average loss: {}".format(epoch, train_avg_loss))
             self.intialTrain_metric_log["Epoch_" + str(epoch)] = train_avg_loss.numpy()
 
             if val == True:

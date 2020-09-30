@@ -214,6 +214,14 @@ class TestData(unittest.TestCase):
         algo = algos.leastConfidence()
         self.assertTrue(algos.alAlgo.__subclasshook__(algo))
 
+        # Test margin confidence
+        algo = algos.marginConfidence()
+        self.assertTrue(algos.alAlgo.__subclasshook__(algo))
+
+        # Test entropy
+        algo = algos.entropy()
+        self.assertTrue(algos.alAlgo.__subclasshook__(algo))
+
     def test_customModel(self):
         """ Check to see if custom children class zoo.customModel are created with accordance to inheritance """
         # Test mnsitCNN
@@ -227,6 +235,16 @@ class TestData(unittest.TestCase):
         metrics = [tf.keras.metrics.Accuracy()]
         zk = zoo.zooKeeper(modelName, show_model=False, metrics=metrics)
         self.assertTrue(zoo.customModel.__subclasshook__(zk))
+
+        # Test ToyA_NN
+        modelName = "cifar10CNN"  # Pick pre-made model
+        metrics = [tf.keras.metrics.Accuracy()]
+        zk = zoo.zooKeeper(modelName, show_model=False, metrics=metrics)
+        self.assertTrue(zoo.customModel.__subclasshook__(zk))
+
+    def test_zooKeeperRaiseNoModel(self):
+        """ This test checks if error is raised from zooKeeper.getmodel() for non existent model"""
+        self.assertRaises(ImportError,zoo.zooKeeper,"dummy_model")
 
 
 ##############################################

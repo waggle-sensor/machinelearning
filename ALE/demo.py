@@ -48,7 +48,7 @@ def main():
     # | 2. Select Active Learning algorithm
     # | ----------------------------
 
-    algo = algos.ratioConfidence()  # Randomly selects samples from each round's cache
+    algo = algos.entropy()  # Randomly selects samples from each round's cache
     algo.reset()
 
     # | ----------------------------
@@ -69,20 +69,18 @@ def main():
     input("press enter to continue")
 
     # Initial training of model on original training data
-    engine.initialTrain(epochs=10, batch_size=32, val=True, plot=True)
+    engine.initialTrain(epochs=1, batch_size=32, val=True, plot=True)
 
     # Run active learning algo
     # Round is how many times the active learning algo samples
     # cycles is how many epochs the model is retrained each time a round occurs of sampling
-    engine.run(rounds=3, cycles=2, batch_size=32, val=True, plot=True)
+    engine.run(rounds=1, cycles=1, batch_size=32, val=True, plot=True)
     engine.saveLog(path="test_log.csv")
     dataClass.deleteCache()
 
     # | ----------------------------
     # | Done
     # | ----------------------------
-
-    print("Finished running")
 
 
 if __name__ == "__main__":
