@@ -67,6 +67,79 @@ class alAlgo(metaclass=abc.ABCMeta):
         """ Selects which samples to get labels for """
         raise NotImplementedError
 
+#######################################################
+
+class marginConfidence(alAlgo):
+    """
+    marginConfidence(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Custom active learning class, inherits alAlgo class.
+    Score samples by predictions through formula MC(x)=(1-(P(y1*|x)-P(y2*|x)))
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
+    """
+
+    def __init__(self):
+        super().__init__(algo_name="Margin Confidence")
+        self.predict_to_sample = True
+
+    def __call__(self, cache: list, n: int, yh) -> list:
+
+        # Check if embedded cache, then cache is available for the round
+        if any(isinstance(i, list) for i in cache):
+            try:
+                cache = cache[self.round]
+            except:
+                raise ValueError("Active Learning Algo has iterated through each round\'s unlabled cache.")
+
+        # Check if sample size is to large for cache
+        if len(cache) < n:
+            raise ValueError("Sample size n is larger than length of round's cache")
+
+        # Calculate MC(x) values
+        yh_vals = yh.iloc[:, 1:].values
+        MC_vals = []
+        for i in range(yh_vals.shape[0]):
+            sample = yh_vals[i, :]
+            sample[::-1].sort()
+            y1, y2 = sample[0], sample[1]
+            mc_val = 1-(y1-y2)
+            MC_vals.append(mc_val)
+
+        target_col_names = ["y" + str(i) for i in range(yh_vals.shape[1])]
+        yh_col_names = ["MC", "ID"] + target_col_names
+        yh = pd.concat([pd.DataFrame(MC_vals), yh], axis=1)
+        yh.columns = yh_col_names
+
+        # Get ids of n largest LC vals
+        n_largest = yh.nlargest(n, 'MC')
+        batch = n_largest["ID"].to_list()
+
+        # Log which samples were used for that round
+        self.sample_log[str(self.round)] = batch
+
+        print("\n")
+        print("Round {} selected samples: {}".format(self.round, batch))
+        print("\n")
+
+        # Increment round
+        self.round += 1
+
+        return batch
+
 
 #######################################################
 
@@ -170,7 +243,7 @@ class uniformSample(alAlgo):
         super().__init__(algo_name="Passive")
         self.predict_to_sample = False
 
-    def __call__(self, cache: list, n: int, yh) -> list:
+    def __call__(self, cache: list, n: int, yh=None) -> list:
         # Check if embedded cache, then cache is available for the round
         if any(isinstance(i, list) for i in cache):
             try:
@@ -189,8 +262,8 @@ class uniformSample(alAlgo):
         # Log which samples were used for that round
         self.sample_log[str(self.round)] = batch
 
-        print("\n")
-        print("Round {} selected samples: {}".format(self.round, idx))
+        print("Selected samples: ")
+        print(idx)
         print("\n")
 
         # Increment round
@@ -242,7 +315,7 @@ class ratioConfidence(alAlgo):
         if len(cache) < n:
             raise ValueError("Sample size n is larger than length of round's cache")
 
-        # Calculate LC(x) values
+        # Calculate RC(x) values
         yh_vals = yh.iloc[:, 1:].values
         RC_vals = []
         for i in range(yh_vals.shape[0]):
@@ -274,3 +347,82 @@ class ratioConfidence(alAlgo):
         self.round += 1
 
         return batch
+
+
+#######################################################
+
+
+class entropy(alAlgo):
+    """
+    ratioConfidence(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Custom active learning class, inherits alAlgo class.
+    Score samples by predictions through formula ent(x)= -sum(P(Y|X)log_{2}P(Y|X))/log_{2}
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
+    """
+
+    def __init__(self):
+        super().__init__(algo_name="Ratio Confidence")
+        self.predict_to_sample = True
+
+    def __call__(self, cache: list, n: int, yh) -> list:
+
+        # Check if embedded cache, then cache is available for the round
+        if any(isinstance(i, list) for i in cache):
+            try:
+                cache = cache[self.round]
+            except:
+                raise ValueError("Active Learning Algo has iterated through each round\'s unlabled cache.")
+
+        # Check if sample size is to large for cache
+        if len(cache) < n:
+            raise ValueError("Sample size n is larger than length of round's cache")
+
+        # Calculate ent(x) values
+        yh_vals = yh.iloc[:, 1:].values
+        ent_vals = []
+        for i in range(yh_vals.shape[0]):
+            sample = yh_vals[i, :]
+            log_probs = sample * np.log2(sample)  # multiply each proba by its base 2 log
+            raw_entropy = 0 - np.sum(log_probs)
+            normalized_entropy = raw_entropy / np.log2(len(sample))
+            ent_vals.append(normalized_entropy)
+
+        target_col_names = ["y" + str(i) for i in range(yh_vals.shape[1])]
+        yh_col_names = ["ENT", "ID"] + target_col_names
+        yh = pd.concat([pd.DataFrame(ent_vals), yh], axis=1)
+        yh.columns = yh_col_names
+
+        # Get ids of n largest LC vals
+        n_largest = yh.nlargest(n, 'ENT')
+        batch = n_largest["ID"].to_list()
+
+        # Log which samples were used for that round
+        self.sample_log[str(self.round)] = batch
+
+        print("\n")
+        print("Round {} selected samples: {}".format(self.round, batch))
+        print("\n")
+
+        # Increment round
+        self.round += 1
+
+        return batch
+
+
+
+
