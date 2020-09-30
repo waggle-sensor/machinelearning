@@ -6,6 +6,9 @@ import pandas as pd
 import numpy as np
 from math import floor
 
+from skimage.io import imread
+from skimage.transform import resize
+
 #######################################################
 
 """
@@ -166,6 +169,7 @@ class DataManager(metaclass=abc.ABCMeta):
             states if to role over previous ul cache to current
         """
 
+        print("\n")
         print("-" * 20)
         print("Parsing raw data")
         print("-" * 20)
@@ -248,7 +252,6 @@ class DataManager(metaclass=abc.ABCMeta):
         val_cache_df = val_cache_df.reset_index(drop=True)
         val_cache_df.to_csv(self.data_path + "/val_cache_" + ".csv")
 
-        print("\n")
         print("Data split:")
         print("{} samples in training cache.".format(len(train_cache_df)))
         print("{} samples in validation cache.".format(len(val_cache_df)))
@@ -450,6 +453,85 @@ class mnistLoader(DataManager):
         # Reshape input X into 2d array to express gray scaled image
         X = X.reshape(X.shape[0], 28, 28, 1)
         X = X / 255  # Scale input data between [0,1]
+
+        # One hot encode targets y
+        y_onehot = np.zeros((y.shape[0], 10))
+        for i in range(y_onehot.shape[0]):
+            y_onehot[i, y[i]] = 1
+
+        return X, y_onehot
+
+
+class cifar10Loader(DataManager):
+    """
+    cifar10Loader Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Load data as needed from the cifar10 dataset.
+
+    Attributes
+    ----------
+    data_df : pd.DataFrame()
+        Stores dataframe of mnist data. This is unique to this class. Each child class of DataManager
+        is going to have a unique feature such as this due to using different types of data.
+
+    Methods
+    -------
+    getBatch(self, cache_ids: list):
+        grabs row of data from data_df based on id's in passed list. Converts into
+        numpy arrays. Makes input matrix and one hot encoded array as target value.
+        Returns processed input and target data.
+
+    """
+
+    def __init__(self, bins=1, keep_bins=False):
+        super().__init__("CIFAR10", bins, keep_bins)
+
+        # For this data set, it is possible to read in all data at one
+        self.data_df = pd.read_csv(self.data_path + "/raw_data/data_tab.csv")
+
+    def image_gen(self, img_paths, img_size=None):
+        """ Function to load images based on passed img_paths """
+        # Iterate over all the image paths
+        images = []
+        for img_path in img_paths:
+            # Load the image and mask, and normalize it to 0-1 range
+            img = imread(img_path) / 255.
+            # Resize the images
+            if img_size != None:
+                img = resize(img, img_size, preserve_range=True)
+            # append the image
+            images.append(img)
+        return np.array(images)
+
+    def getBatch(self, cache_ids: list):
+        """
+        Purpose
+        _______
+        Receives from algo class list of sample ids to get from memory or RAM
+
+        Arguments
+        __________
+        cache_ids : list
+            list contains ids of what data samples to send back
+
+        Returns
+        _______
+        X : np.array
+            Input values for model
+        y : Target values for model
+
+        """
+
+        # Select data based off of passed cache_ids
+        img_paths = [self.data_path + "/raw_data/images/" + str(id) + ".png" for id in cache_ids]
+
+        X = self.image_gen(img_paths) # shape (batch_size,32,32,3)
+
+        batchData = self.data_df.loc[self.data_df['ID'].isin(cache_ids)]
+        y = batchData[["y"]].values
 
         # One hot encode targets y
         y_onehot = np.zeros((y.shape[0], 10))
