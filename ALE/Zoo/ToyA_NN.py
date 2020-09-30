@@ -73,17 +73,15 @@ class ToyA_NN(customModel):
         """ Creates tf.keras model and returns it. Change model architecture here """
 
         model = Sequential(name="ToyA_NN")
-        model.add(Dense(120, activation='swish', kernel_regularizer=tf.keras.regularizers.l1(0.001),
-                        activity_regularizer=tf.keras.regularizers.l2(0.001), input_dim=self.input_shape))
-        model.add(Dropout(0.1))
-        model.add(Dense(32, kernel_regularizer=tf.keras.regularizers.l1(0.001),
-                        activity_regularizer=tf.keras.regularizers.l2(0.001), activation='swish'))
-        model.add(Dropout(0.1))
+        model.add(Dense(256, activation='elu', kernel_regularizer=tf.keras.regularizers.l1(0.01),
+                        activity_regularizer=tf.keras.regularizers.l2(0.01), input_dim=self.input_shape))
+        model.add(Dropout(0.2))
+        model.add(Dense(64, kernel_regularizer=tf.keras.regularizers.l1(0.01),
+                        activity_regularizer=tf.keras.regularizers.l2(0.01), activation='elu'))
+        model.add(Dropout(0.2))
         model.add(Dense(self.num_classes, activation='softmax'))
 
-        print("-" * 20)
         print("Successfully built the model")
-        print("-" * 20)
 
         return model
 

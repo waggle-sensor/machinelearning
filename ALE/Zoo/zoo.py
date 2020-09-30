@@ -21,7 +21,7 @@ class zooKeeper():
     def getModel(self, show_model):
         try:
             print("-" * 20)
-            print("Found model {}".format(self.modelName))
+            print("Preparing model {}".format(self.modelName))
             print("-" * 20)
 
             modelClass = getattr(import_module("Zoo." + self.modelName), self.modelName)
@@ -29,14 +29,12 @@ class zooKeeper():
 
             # Display model layers, shapes, and number of parameters
             if show_model == True:
-                print("\n")
-                print("-" * 20)
                 print(self.modelObject.model.summary())
                 print("-" * 20)
 
         except:
             print("Could not properly load the model class for {}.".format(self.modelName))
-            raise
+            raise ImportError
 
 
 #######################################################
@@ -56,7 +54,7 @@ class customModel(metaclass=abc.ABCMeta):
 
     def testLoad(self):
         print("-" * 20)
-        print("Model class successfully loaded!")
+        print("Model successfully loaded!")
         print("-" * 20)
 
     @abc.abstractmethod
@@ -85,9 +83,9 @@ class customModel(metaclass=abc.ABCMeta):
             metric.reset_states()
             # Special case if metric is accuracy since need to round to one-hot on prediction
             if metric.name == 'accuracy':
-                targets_hot = tf.where(tf.equal(tf.reduce_max(targets, axis=1,keepdims=True), targets),
-                                       tf.constant(1, shape=targets.shape),tf.constant(0, shape=targets.shape))
-                metric.update_state(yh, targets_hot)
+                y_max = tf.argmax(targets, 1)
+                yh_max = tf.argmax(yh, 1)
+                metric.update_state(y_max, yh_max)
             else:
                 metric.update_state(yh, targets)
             scores[metric.name] = metric.result().numpy()

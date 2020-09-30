@@ -6,9 +6,9 @@ from Zoo.zoo import customModel
 
 #######################################################
 
-class mnistCNN(customModel):
+class cifar10CNN(customModel):
     """
-    mnistCNN() Documentation
+    cifar10CNN() Documentation
     --------------------------
 
     Purpose
@@ -24,7 +24,7 @@ class mnistCNN(customModel):
     Methods
     -------
     def loadModel(self):
-    Purpose: Load keras model configured for mnist data set. If you desire to modify the
+    Purpose: Load keras model configured for cifar10 data set. If you desire to modify the
             architecture, do so here.
 
     def trainBatch(self, inputs, targets):
@@ -39,7 +39,7 @@ class mnistCNN(customModel):
     __slots__ = ('loss', 'opt', 'metrics', 'input_shape', 'num_classes', 'model')
 
     def __init__(self, loss=None, optimizer=None, metrics=None):
-        self.input_shape = (28, 28, 1)  # tf.keras.layers.Conv2D input shape (batch_size, height, width, channels)
+        self.input_shape = (32, 32, 3)  # tf.keras.layers.Conv2D input shape (batch_size, height, width, channels)
         self.num_classes = 10
 
         # Loss function for the model, takes loss functions from tf.keras.losses
@@ -72,15 +72,15 @@ class mnistCNN(customModel):
     def loadModel(self) -> tf.keras.Sequential():
         """ Creates tf.keras model and returns it. Change model architecture here """
 
-        model = Sequential(name="mnistCNN")
-        model.add(Conv2D(16, kernel_size=(5, 5), strides=(1, 1),
-                         activation='relu',
+        model = Sequential(name="cifar10CNN")
+        model.add(Conv2D(16, kernel_size=(5, 5), strides=(2, 2),
+                         activation='elu',
                          input_shape=self.input_shape))
-        model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-        model.add(Conv2D(32, (5, 5), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2), strides=(1, 1)))
+        model.add(Conv2D(32, (2, 2), activation='elu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Flatten())
-        model.add(Dense(120, activation='relu'))
+        model.add(Dense(120, activation='elu'))
         model.add(Dense(self.num_classes, activation='softmax'))
 
         print("Successfully built the model")
