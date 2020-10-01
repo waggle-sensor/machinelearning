@@ -36,11 +36,12 @@ class ToyA_NN(customModel):
             custom_training_walkthrough .
 
     """
-    __slots__ = ('loss', 'opt', 'metrics', 'input_shape', 'num_classes', 'model')
+    __slots__ = ('loss', 'opt', 'metrics', 'input_shape', 'num_classes', 'model','dataset')
 
-    def __init__(self, loss=None, optimizer=None, metrics=None):
+    def __init__(self, loss=None, optimizer=None, metrics=None,dataset=None):
         self.input_shape = 2
         self.num_classes = 2
+        self.dataset = dataset
 
         # Loss function for the model, takes loss functions from tf.keras.losses
         if loss == None:

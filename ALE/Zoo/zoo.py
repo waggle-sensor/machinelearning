@@ -7,12 +7,13 @@ import tensorflow as tf
 #######################################################
 
 class zooKeeper():
-    def __init__(self, modelName, show_model=False, loss=None, optimizer=None, metrics=None):
+    def __init__(self, modelName, dataset=None, show_model=False, loss=None, optimizer=None, metrics=None):
         self.modelName = modelName
 
         self.loss = loss
         self.optimizer = optimizer
         self.metrics = metrics
+        self.dataset = dataset
 
         self.modelObject = None
 
@@ -25,7 +26,7 @@ class zooKeeper():
             print("-" * 20)
 
             modelClass = getattr(import_module("Zoo." + self.modelName), self.modelName)
-            self.modelObject = modelClass(loss=self.loss, optimizer=self.optimizer, metrics=self.metrics)
+            self.modelObject = modelClass(loss=self.loss, optimizer=self.optimizer, metrics=self.metrics,dataset=self.dataset)
 
             # Display model layers, shapes, and number of parameters
             if show_model == True:
@@ -45,6 +46,7 @@ class customModel(metaclass=abc.ABCMeta):
         self.loss = None
         self.opt = None
         self.metrics = None
+        self.dataset = None
 
     @classmethod
     def __subclasshook__(cls, subclass):

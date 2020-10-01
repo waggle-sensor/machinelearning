@@ -1,14 +1,15 @@
 import tensorflow as tf
 from tensorflow.keras.layers import *
-from tensorflow.keras import Sequential
+from tensorflow.keras.models import Sequential
 from Zoo.zoo import customModel
+import numpy as np
 
 
 #######################################################
 
-class cifar10CNN(customModel):
+class MobileNet(customModel):
     """
-    cifar10CNN() Documentation
+    MobileNet() Documentation
     --------------------------
 
     Purpose
@@ -24,7 +25,7 @@ class cifar10CNN(customModel):
     Methods
     -------
     def loadModel(self):
-    Purpose: Load keras model configured for cifar10 data set. If you desire to modify the
+    Purpose: Load keras model configured for mnist data set. If you desire to modify the
             architecture, do so here.
 
     def trainBatch(self, inputs, targets):
@@ -36,12 +37,21 @@ class cifar10CNN(customModel):
             custom_training_walkthrough .
 
     """
-    __slots__ = ('loss', 'opt', 'metrics', 'input_shape', 'num_classes', 'model','datasett')
+    __slots__ = ('loss', 'opt', 'metrics', 'input_shape', 'num_classes', 'model', 'dataset')
 
-    def __init__(self, loss=None, optimizer=None, metrics=None,dataset=None):
-        self.input_shape = (32, 32, 3)  # tf.keras.layers.Conv2D input shape (batch_size, height, width, channels)
-        self.num_classes = 10
-        self.dataset = "CIFAR10"
+    def __init__(self, loss=None, optimizer=None, metrics=None, dataset=None):
+
+        self.dataset = dataset
+        if dataset == None:
+            raise ValueError("dataset not provided. Pass either 'MNIST' or 'CIFAR10")
+        elif dataset == "MNIST":
+            self.input_shape = (28, 28, 1)
+            self.num_classes = 10
+        elif dataset == "CIFAR10":
+            self.input_shape = (32, 32, 3)
+            self.num_classes = 10
+        else:
+            raise ValueError("dataset is not equal to 'MNIST' or 'CIFAR10' ")
 
         # Loss function for the model, takes loss functions from tf.keras.losses
         if loss == None:
@@ -73,19 +83,21 @@ class cifar10CNN(customModel):
     def loadModel(self) -> tf.keras.Sequential():
         """ Creates tf.keras model and returns it. Change model architecture here """
 
-        model = Sequential(name="cifar10CNN")
-        model.add(Conv2D(16, kernel_size=(5, 5), strides=(2, 2),
-                         activation='elu',
-                         input_shape=self.input_shape))
-        model.add(MaxPooling2D(pool_size=(2, 2), strides=(1, 1)))
-        model.add(Conv2D(32, (2, 2), activation='elu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model = Sequential()
+        model.add(SeparableConv2D(32, 3, strides=2, input_shape=self.input_shape))
+        model.add(Dropout(.2))
+        model.add(SeparableConv2D(32, 3))
+        model.add(Dropout(.2))
+        model.add(SeparableConv2D(64, 2))
+        model.add(Dropout(.2))
+        model.add(SeparableConv2D(64, 1))
+        model.add(Dropout(.2))
+        model.add(SeparableConv2D(128, 1))
+        model.add(Dropout(.2))
+        model.add(AveragePooling2D(pool_size=(2, 2)))
         model.add(Flatten())
-        model.add(Dense(120, activation='elu'))
-        model.add(Dense(self.num_classes, activation='softmax'))
+        model.add(Dense(self.num_classes, activation="softmax"))
 
         print("Successfully built the model")
 
         return model
-
-
