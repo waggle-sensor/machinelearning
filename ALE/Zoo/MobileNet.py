@@ -2,7 +2,6 @@ import tensorflow as tf
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import Sequential
 from Zoo.zoo import customModel
-import numpy as np
 
 
 #######################################################
