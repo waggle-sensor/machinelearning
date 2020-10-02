@@ -40,7 +40,7 @@ def main():
     bins = 1
     keep_bins = False
 
-    dataClass = cifar10Loader(bins, keep_bins)  # Declare data manager class
+    dataClass = ToyALoader(bins, keep_bins)  # Declare data manager class
     dataClass.parseData(split, bins, keep_bins)
     dataClass.loadCaches()
 
@@ -55,9 +55,9 @@ def main():
     # | 3. Select model
     # | ----------------------------
 
-    modelName = "MobileNet"  # Pick pre-made model
+    modelName = "ToyA_NN"  # Pick pre-made model
     metrics = [tf.keras.metrics.Accuracy(), tf.keras.metrics.KLDivergence()]
-    zk = zoo.zooKeeper(modelName, show_model=True, metrics=metrics,dataset="CIFAR10")  # Load model and compile
+    zk = zoo.zooKeeper(modelName, show_model=True, metrics=metrics)  # Load model and compile
 
     # | ----------------------------
     # | 4. Run algorithm and log results
@@ -69,7 +69,7 @@ def main():
     input("press enter to continue")
 
     # Initial training of model on original training data
-    engine.initialTrain(epochs=15, batch_size=32, val=True, plot=True)
+    engine.initialTrain(epochs=1, batch_size=32, val=True, plot=True)
 
     # Run active learning algo
     # Round is how many times the active learning algo samples
