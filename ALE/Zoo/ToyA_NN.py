@@ -51,7 +51,7 @@ class ToyA_NN(customModel):
 
         # Optimizer for the model, takes optimizers from tf.keras.optimizers
         if optimizer == None:
-            self.opt = tf.keras.optimizers.SGD(lr=0.01)
+            self.opt = tf.keras.optimizers.RMSprop(lr=0.001)
         else:
             self.opt = optimizer
 
@@ -74,12 +74,12 @@ class ToyA_NN(customModel):
         """ Creates tf.keras model and returns it. Change model architecture here """
 
         model = Sequential(name="ToyA_NN")
-        model.add(Dense(256, activation='elu', kernel_regularizer=tf.keras.regularizers.l1(0.01),
-                        activity_regularizer=tf.keras.regularizers.l2(0.01), input_dim=self.input_shape))
-        model.add(Dropout(0.2))
-        model.add(Dense(64, kernel_regularizer=tf.keras.regularizers.l1(0.01),
-                        activity_regularizer=tf.keras.regularizers.l2(0.01), activation='elu'))
-        model.add(Dropout(0.2))
+        model.add(Dense(128, activation='relu', kernel_regularizer=tf.keras.regularizers.l1(0.001),
+                        activity_regularizer=tf.keras.regularizers.l2(0.001), input_dim=self.input_shape))
+        model.add(Dropout(0.1))
+        model.add(Dense(64, kernel_regularizer=tf.keras.regularizers.l1(0.001),
+                        activity_regularizer=tf.keras.regularizers.l2(0.001), activation='relu'))
+        model.add(Dropout(0.1))
         model.add(Dense(self.num_classes, activation='softmax'))
 
         print("Successfully built the model")
