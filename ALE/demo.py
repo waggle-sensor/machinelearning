@@ -36,11 +36,11 @@ def main():
     # | ---------------------------
 
     # DataManager parameters
-    split = (.1, .1, .8)  # (train, val, unlabeled)
+    split = (.0015, .6985, .3)  # (train, val, unlabeled)
     bins = 1
     keep_bins = False
 
-    dataClass = ToyALoader(bins, keep_bins)  # Declare data manager class
+    dataClass = mnistLoader(bins, keep_bins)  # Declare data manager class
     dataClass.parseData(split, bins, keep_bins)
     dataClass.loadCaches()
 
@@ -48,14 +48,15 @@ def main():
     # | 2. Select Active Learning algorithm
     # | ----------------------------
 
-    algo = algos.entropy()  # Randomly selects samples from each round's cache
+    #algo = algos.DAL(input_dim=120)
+    algo = algos.uniformSample()
     algo.reset()
 
     # | ----------------------------
     # | 3. Select model
     # | ----------------------------
 
-    modelName = "ToyA_NN"  # Pick pre-made model
+    modelName = "mnistCNN"  # Pick pre-made model
     metrics = [tf.keras.metrics.Accuracy(), tf.keras.metrics.KLDivergence()]
     zk = zoo.zooKeeper(modelName, show_model=True, metrics=metrics)  # Load model and compile
 
@@ -66,15 +67,18 @@ def main():
     # Declare engine
     sample_size = 100
     engine = Engine(algo, dataClass, zk, sample_size)
-    input("press enter to continue")
 
     # Initial training of model on original training data
-    engine.initialTrain(epochs=1, batch_size=32, val=True, plot=True)
+    #engine.initialTrain(epochs=15, batch_size=32, val=True, plot=True)
+
+
+    #engine.saveModel("test_model")
+    engine.loadModel("test_model")
 
     # Run active learning algo
     # Round is how many times the active learning algo samples
     # cycles is how many epochs the model is retrained each time a round occurs of sampling
-    engine.run(rounds=1, cycles=1, batch_size=32, val=True, plot=True)
+    engine.run(rounds=8, cycles=15, batch_size=32, val=True, plot=True)
     engine.saveLog(path="test_log.csv")
     dataClass.deleteCache()
 

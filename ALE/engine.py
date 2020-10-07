@@ -1,4 +1,5 @@
 # Import modules
+import tensorflow as tf
 import numpy as np
 import pandas as pd
 import time
@@ -249,27 +250,6 @@ class Engine():
 
         return total_loss, total_scores
 
-    def evalCache(self, cache, batch_size):
-        """ Calls model and performs prediction and returns predictions """
-        remainder_samples = len(cache) % batch_size  # Calculate number of remainder samples from batches
-        predictions = []
-
-        # Run batches
-        for batch in trange(floor(len(cache) / batch_size)):
-            batch_ids = cache[batch_size * batch:batch_size * (batch + 1)]
-            X, y = self.dataClass.getBatch(batch_ids)
-            _, _, yh = self.modelManager.modelObject.eval(X, y)
-            predictions.append(yh)
-
-        # Run remainders
-        if remainder_samples > 0:
-            batch_ids = cache[(-1)*remainder_samples:]
-            X, y = self.dataClass.getBatch(batch_ids)
-            _, _, yh = self.modelManager.modelObject.eval(X, y)
-            predictions.append(yh)
-
-        return np.concatenate(predictions, axis=0)
-
     def saveLog(self, path):
         """ Save log of type dict to a csv """
         log_df = pd.DataFrame(self.log)
@@ -287,6 +267,91 @@ class Engine():
         ax.grid(True)
 
         plt.show()
+
+    def evalCache(self, cache, batch_size,use_extractor=False):
+        """ Calls model and performs prediction and returns predictions """
+        remainder_samples = len(cache) % batch_size  # Calculate number of remainder samples from batches
+        predictions = []
+
+        # Run batches
+        for batch in trange(floor(len(cache) / batch_size)):
+            batch_ids = cache[batch_size * batch:batch_size * (batch + 1)]
+            X, y = self.dataClass.getBatch(batch_ids)
+            if use_extractor == False:
+                _, _, yh = self.modelManager.modelObject.eval(X, y)
+                predictions.append(yh)
+            elif use_extractor == True:
+                yh = self.extractor.predict(X)
+                predictions.append(yh)
+
+        # Run remainders
+        if remainder_samples > 0:
+            batch_ids = cache[(-1)*remainder_samples:]
+            X, y = self.dataClass.getBatch(batch_ids)
+            if use_extractor == False:
+                _, _, yh = self.modelManager.modelObject.eval(X, y)
+                predictions.append(yh)
+            elif use_extractor == True:
+                yh = self.extractor.predict(X)
+                predictions.append(yh)
+
+        if use_extractor == True:
+            return np.concatenate(predictions, axis=0)
+
+        if use_extractor == False:
+            return np.concatenate(predictions, axis=0)
+
+    def evalAlgoClassClassifieer(self,cache,unlabeled_pred,batch_size):
+        remainder_samples = len(cache) % batch_size  # Calculate number of remainder samples from batches
+        predictions = []
+
+        # Run batches
+        for batch in trange(floor(len(cache) / batch_size)):
+            X = unlabeled_pred[batch_size * batch:batch_size * (batch + 1),:]
+            yh = self.algoClass.inferBinaryClassifier(X)
+            predictions.append(yh)
+
+        # Run remainders
+        if remainder_samples > 0:
+            X = unlabeled_pred[(-1)*remainder_samples:,:]
+            yh = self.algoClass.inferBinaryClassifier(X)
+            predictions.append(yh)
+
+        return np.concatenate(predictions, axis=0)
+
+    def trainAlgoClassClasssifier(self,cache_df,batch_size):
+        print("Training {} classifier".format(self.algoClass.algo_name))
+        # 1. feed all samples through model and get second to last layer output
+        self.extractor = tf.keras.Model(inputs=self.modelManager.modelObject.model.inputs,
+                                outputs=self.modelManager.modelObject.model.layers[-2].output,name="BC")
+        print(self.extractor.summary())
+
+        # 1a. feed through labeled cache and add [1,0] as target
+        labeled_pred = self.evalCache(self.dataClass.train_cache,batch_size,use_extractor=True)
+        labeled_targets = np.hstack((np.ones((labeled_pred.shape[0],1)),np.zeros((labeled_pred.shape[0],1))))
+        #print(labeled_pred.shape,labeled_targets.shape)
+
+        # 1b. feed through unlabeled cache (or subset) and add [0,1]
+        unlabeled_pred = self.evalCache(cache_df, batch_size, use_extractor=True)
+        unlabeled_targets = np.hstack((np.zeros((unlabeled_pred.shape[0],1)),np.ones((unlabeled_pred.shape[0],1))))
+        #print(unlabeled_pred.shape,unlabeled_targets.shape)
+
+        # 2. Stack data and shuffle rows
+        a = np.concatenate((labeled_pred, labeled_targets), axis=1)
+        b = np.concatenate((unlabeled_pred, unlabeled_targets), axis=1)
+        temp_dataset = np.concatenate((a,b),axis=0)
+        np.random.shuffle(temp_dataset)
+
+        # 3. train binary classifier
+        self.algoClass.trainBinaryClassifier(temp_dataset,batch_size)
+
+        # 4. feed unlabeled cache through binary classifier and save prediction ids
+        yh = self.evalAlgoClassClassifieer(cache_df,unlabeled_pred,batch_size)
+        ids = self.algoClass(cache_df, self.sample_size, pd.DataFrame(yh))
+
+        # 5. return back ids of top samples
+        return ids
+
 
     def runCycle(self, batch_size, cycles):
         """ Subroutine for run where model is trained on batch from algo, metrics logged, and caches updated """
@@ -306,13 +371,15 @@ class Engine():
             cache_df = self.dataClass.unlabeled_cache
 
         # Get subset of cache ids based off of active learning algo
-        if self.algoClass.predict_to_sample == False:
-            ids = self.algoClass(cache_df, self.sample_size)
-        else:
+        if self.algoClass.predict_to_sample == True:
             # cache_df
             yh = self.evalCache(cache_df, batch_size)
             yh = pd.concat([pd.DataFrame(cache_df[:len(yh)]), pd.DataFrame(yh)], axis=1)
             ids = self.algoClass(cache_df, self.sample_size, yh)
+        elif self.algoClass.feature_set == True:
+            ids = self.trainAlgoClassClasssifier(cache_df,batch_size)
+        else:
+            ids = self.algoClass(cache_df, self.sample_size)
 
         # Manage new labels within caches
         self.dataClass.train_cache.extend(ids)  # Add new ids to train cache
@@ -443,3 +510,12 @@ class Engine():
             else:
                 self.plotLog([self.intialTrain_metric_log], xlabel, ylabel, title, "Train")
             input('press return to continue')
+
+    def saveModel(self,model_name=None):
+        if model_name == None:
+            self.modelManager.modelObject.model.save('model')
+        else:
+            self.modelManager.modelObject.model.save(model_name)
+
+    def loadModel(self,model_name):
+        self.modelManager.modelObject.model = tf.keras.models.load_model(model_name)
