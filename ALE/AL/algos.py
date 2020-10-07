@@ -3,6 +3,13 @@ import abc
 import random
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
+from math import floor
+from itertools import chain
+
+import tensorflow as tf
+from tensorflow.keras.layers import *
+from tensorflow.keras import Sequential
 
 
 #######################################################
@@ -95,6 +102,7 @@ class marginConfidence(alAlgo):
     def __init__(self):
         super().__init__(algo_name="Margin Confidence")
         self.predict_to_sample = True
+        self.feature_set = False
 
     def __call__(self, cache: list, n: int, yh) -> list:
 
@@ -169,6 +177,7 @@ class leastConfidence(alAlgo):
     def __init__(self):
         super().__init__(algo_name="Least Confidence")
         self.predict_to_sample = True
+        self.feature_set = False
 
     def __call__(self, cache: list, n: int, yh) -> list:
 
@@ -242,6 +251,7 @@ class uniformSample(alAlgo):
     def __init__(self):
         super().__init__(algo_name="Passive")
         self.predict_to_sample = False
+        self.feature_set = False
 
     def __call__(self, cache: list, n: int, yh=None) -> list:
         # Check if embedded cache, then cache is available for the round
@@ -301,6 +311,7 @@ class ratioConfidence(alAlgo):
     def __init__(self):
         super().__init__(algo_name="Ratio Confidence")
         self.predict_to_sample = True
+        self.feature_set = False
 
     def __call__(self, cache: list, n: int, yh) -> list:
 
@@ -378,6 +389,7 @@ class entropy(alAlgo):
     def __init__(self):
         super().__init__(algo_name="Ratio Confidence")
         self.predict_to_sample = True
+        self.feature_set = False
 
     def __call__(self, cache: list, n: int, yh) -> list:
 
@@ -423,6 +435,137 @@ class entropy(alAlgo):
 
         return batch
 
+
+
+#######################################################
+
+
+class DAL(alAlgo):
+    """
+    DAL(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Custom active learning class, inherits alAlgo class.
+    Score samples by predictions through formula ent(x)= -sum(P(Y|X)log_{2}P(Y|X))/log_{2}
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
+    """
+
+    def __init__(self,input_dim=None):
+        super().__init__(algo_name="DAL")
+        self.predict_to_sample = False
+        self.feature_set = True
+
+        if input_dim == None:
+            raise ValueError("Must pass input dim as int to use DAL")
+        self.input_dim = input_dim
+        self.model = self.getBinaryClassifier()
+
+        self.opt = tf.keras.optimizers.Adam(lr=0.0001)
+        self.loss = tf.keras.losses.categorical_crossentropy
+
+    def getBinaryClassifier(self):
+        model = Sequential(name="Binary Classifier")
+        model.add(Dense(128, activation='elu', input_dim=self.input_dim))
+        model.add(Dropout(.1))
+        model.add(Dense(2, activation='softmax'))
+        return model
+
+    def grad(self, inputs, targets):
+        with tf.GradientTape() as tape:
+            loss_value = self.loss(self.model(inputs, training=True), targets)
+        return loss_value, tape.gradient(loss_value, self.model.trainable_variables)
+
+    def trainBatch(self, inputs, targets) -> float:
+        """ Calculates loss and gradients for batch of data and applies update to weights """
+        loss_value, grads = self.grad(inputs, targets)
+        self.opt.apply_gradients(zip(grads, self.model.trainable_variables))
+        return loss_value
+
+    def predict(self, inputs):
+        """ Used for predicting with model but does not have labels """
+        yh = self.model(inputs)
+        return yh
+
+    def trainBinaryClassifier(self,dataset,batch_size):
+        remainder_samples = dataset.shape[0] % batch_size # Calculate number of remainder samples from batches
+        total_loss= []
+
+        # Run batches
+        print("Training DAL Binary Classifier")
+        for i in tqdm(range(50)):
+            for batch in range(floor(dataset.shape[0] / batch_size)):
+                data = dataset[batch_size * batch:batch_size * (batch + 1),:]
+                X, y = data[:,:-2], data[:,-2:]
+                loss = self.trainBatch(X, y)
+                total_loss.append(loss)
+
+            # Run remainders
+            if remainder_samples > 0:
+                data = dataset[(-1)*remainder_samples:,:]
+                X, y = data[:,:-2], data[:,-2:]
+                loss = self.trainBatch(X, y)
+                total_loss.append(loss)
+
+            total_loss = list(chain(*total_loss))
+            val_avg_loss = sum(total_loss) / len(total_loss)
+            total_loss = []
+        print("DAL binary classifier loss: {}".format(val_avg_loss))
+
+
+    def inferBinaryClassifier(self,inputs):
+        yh = self.model(inputs)
+        return yh
+
+    def resetBinayClassifier(self):
+        pass
+
+    def __call__(self, cache: list, n: int, yh) -> list:
+
+        # Check if embedded cache, then cache is available for the round
+        if any(isinstance(i, list) for i in cache):
+            try:
+                cache = cache[self.round]
+            except:
+                raise ValueError("Active Learning Algo has iterated through each round\'s unlabled cache.")
+
+        # Check if sample size is to large for cache
+        if len(cache) < n:
+            raise ValueError("Sample size n is larger than length of round's cache")
+
+        # Calculate LC(x) values
+        yh_vals = yh.iloc[:, 1].values
+        yh_col_names = ["yh", "ID"]
+        yh = pd.concat([pd.DataFrame(yh_vals), pd.DataFrame(cache)], axis=1)
+        yh.columns = yh_col_names
+
+        # Get ids of n largest LC vals
+        n_largest = yh.nlargest(n, 'yh')
+        batch = n_largest["ID"].to_list()
+
+        # Log which samples were used for that round
+        self.sample_log[str(self.round)] = batch
+
+        print("\n")
+        print("Round {} selected samples: {}".format(self.round, batch))
+        print("\n")
+
+        # Increment round
+        self.round += 1
+
+        return batch
 
 
 
