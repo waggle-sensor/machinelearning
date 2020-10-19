@@ -48,8 +48,11 @@ def main():
     # | 2. Select Active Learning algorithm
     # | ----------------------------
 
+    #algo = algos.DALratio(input_dim=120)
+    #algo = algos.AADA(input_dim=120)
     #algo = algos.DAL(input_dim=120)
-    algo = algos.uniformSample()
+    algo = algos.DALOC(input_dim=120)
+    #algo = algos.uniformSample()
     algo.reset()
 
     # | ----------------------------
@@ -69,7 +72,7 @@ def main():
     engine = Engine(algo, dataClass, zk, sample_size)
 
     # Initial training of model on original training data
-    #engine.initialTrain(epochs=15, batch_size=32, val=True, plot=True)
+    #engine.initialTrain(epochs=1, batch_size=32, val=True, plot=True)
 
 
     #engine.saveModel("test_model")
