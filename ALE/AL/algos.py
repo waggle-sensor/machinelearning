@@ -10,7 +10,8 @@ from itertools import chain
 import tensorflow as tf
 from tensorflow.keras.layers import *
 from tensorflow.keras import Sequential
-
+from tensorflow.keras import regularizers
+from typeguard import typechecked
 
 #######################################################
 
@@ -103,6 +104,7 @@ class marginConfidence(alAlgo):
         super().__init__(algo_name="Margin Confidence")
         self.predict_to_sample = True
         self.feature_set = False
+        self.single_output = False
 
     def __call__(self, cache: list, n: int, yh) -> list:
 
@@ -178,6 +180,7 @@ class leastConfidence(alAlgo):
         super().__init__(algo_name="Least Confidence")
         self.predict_to_sample = True
         self.feature_set = False
+        self.single_output = False
 
     def __call__(self, cache: list, n: int, yh) -> list:
 
@@ -252,6 +255,7 @@ class uniformSample(alAlgo):
         super().__init__(algo_name="Passive")
         self.predict_to_sample = False
         self.feature_set = False
+        self.single_output = False
 
     def __call__(self, cache: list, n: int, yh=None) -> list:
         # Check if embedded cache, then cache is available for the round
@@ -312,6 +316,7 @@ class ratioConfidence(alAlgo):
         super().__init__(algo_name="Ratio Confidence")
         self.predict_to_sample = True
         self.feature_set = False
+        self.single_output = False
 
     def __call__(self, cache: list, n: int, yh) -> list:
 
@@ -390,6 +395,7 @@ class entropy(alAlgo):
         super().__init__(algo_name="Ratio Confidence")
         self.predict_to_sample = True
         self.feature_set = False
+        self.single_output = False
 
     def __call__(self, cache: list, n: int, yh) -> list:
 
@@ -448,7 +454,6 @@ class DAL(alAlgo):
     Purpose
     ----------
     Custom active learning class, inherits alAlgo class.
-    Score samples by predictions through formula ent(x)= -sum(P(Y|X)log_{2}P(Y|X))/log_{2}
 
     Attributes
     ----------
@@ -467,6 +472,157 @@ class DAL(alAlgo):
         super().__init__(algo_name="DAL")
         self.predict_to_sample = False
         self.feature_set = True
+        self.single_output = False
+
+        if input_dim == None:
+            raise ValueError("Must pass input dim as int to use DAL")
+        self.input_dim = input_dim
+        self.model = self.getBinaryClassifier()
+
+        self.opt = tf.keras.optimizers.RMSprop(lr=0.001)
+        #self.loss = tf.keras.losses.categorical_crossentropy
+        self.loss = tf.keras.losses.kl_divergence
+        # self.loss = tf.keras.losses.KLDivergence
+
+    def getBinaryClassifier(self):
+        model = Sequential(name="BC")
+        #model.add(Dense(128, activation='elu', kernel_regularizer=regularizers.l1_l2(l1=1e-5, l2=1e-4),
+        #         bias_regularizer=regularizers.l2(1e-4), activity_regularizer=regularizers.l2(1e-5),
+        #        input_dim=self.input_dim))
+        #model.add(Dropout(.1))
+        # model.add(Dense(2, kernel_regularizer=regularizers.l1_l2(l1=1e-5, l2=1e-4),
+        #         bias_regularizer=regularizers.l2(1e-4), activity_regularizer=regularizers.l2(1e-5), activation='softmax'))
+
+        #model.add(SpectralNormalization(Dense(128, activation='elu', input_dim=self.input_dim)))
+        #model.add(Dropout(.1))
+        #model.add(SpectralNormalization(Dense(32, activation='elu')))
+        #model.add(Dropout(.1))
+
+
+        model.add(Dense(128, activation='elu',input_dim=self.input_dim))
+        #model.add(Dropout(.1))
+        model.add(LayerNormalization(axis=1))
+        model.add(Dense(2, activation='softmax'))
+
+        return model
+
+    @tf.function
+    def grad(self, inputs, targets):
+        with tf.GradientTape() as tape:
+            loss_value = self.loss(self.model(inputs, training=True), targets)
+        return loss_value, tape.gradient(loss_value, self.model.trainable_variables)
+
+    @tf.function
+    def trainBatch(self, inputs, targets) -> float:
+        """ Calculates loss and gradients for batch of data and applies update to weights """
+        loss_value, grads = self.grad(inputs, targets)
+        self.opt.apply_gradients(zip(grads, self.model.trainable_variables))
+        return loss_value
+
+    @tf.function
+    def predict(self, inputs):
+        """ Used for predicting with model but does not have labels """
+        yh = self.model(inputs)
+        return yh
+
+    def trainBinaryClassifier(self,dataset,batch_size):
+        remainder_samples = dataset.shape[0] % batch_size # Calculate number of remainder samples from batches
+        total_loss= []
+
+        # Run batches
+        print("Training DAL Binary Classifier")
+        for i in tqdm(range(100)):
+            for batch in range(floor(dataset.shape[0] / batch_size)):
+                data = dataset[batch_size * batch:batch_size * (batch + 1),:]
+                X, y = data[:,:-2], data[:,-2:]
+                loss = self.trainBatch(X, y)
+                total_loss.append(loss)
+
+            # Run remainders
+            if remainder_samples > 0:
+                data = dataset[(-1)*remainder_samples:,:]
+                X, y = data[:,:-2], data[:,-2:]
+                loss = self.trainBatch(X, y)
+                total_loss.append(loss)
+
+            total_loss = list(chain(*total_loss))
+            val_avg_loss = sum(total_loss) / len(total_loss)
+            total_loss = []
+        print("DAL binary classifier loss: {}".format(val_avg_loss))
+
+
+    def inferBinaryClassifier(self,inputs):
+        yh = self.model(inputs)
+        return yh
+
+    def resetBinayClassifier(self):
+        pass
+
+    def __call__(self, cache: list, n: int, yh) -> list:
+
+        # Check if embedded cache, then cache is available for the round
+        if any(isinstance(i, list) for i in cache):
+            try:
+                cache = cache[self.round]
+            except:
+                raise ValueError("Active Learning Algo has iterated through each round\'s unlabled cache.")
+
+        # Check if sample size is to large for cache
+        if len(cache) < n:
+            raise ValueError("Sample size n is larger than length of round's cache")
+
+        # Calculate LC(x) values
+        yh_vals = yh.iloc[:, 1].values
+        yh_col_names = ["yh", "ID"]
+        yh = pd.concat([pd.DataFrame(yh_vals), pd.DataFrame(cache)], axis=1)
+        yh.columns = yh_col_names
+
+        # Get ids of n largest LC vals
+        n_largest = yh.nlargest(n, 'yh')
+        batch = n_largest["ID"].to_list()
+
+        # Log which samples were used for that round
+        self.sample_log[str(self.round)] = batch
+
+        print("\n")
+        print("Round {} selected samples: {}".format(self.round, batch))
+        print("\n")
+
+        # Increment round
+        self.round += 1
+
+        return batch
+
+#######################################################
+
+
+class DALratio(alAlgo):
+    """
+    DAL(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Custom active learning class, inherits alAlgo class.
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
+    """
+
+    def __init__(self,input_dim=None):
+        super().__init__(algo_name="DALratio")
+        self.predict_to_sample = False
+        self.feature_set = True
+        self.single_output = False
 
         if input_dim == None:
             raise ValueError("Must pass input dim as int to use DAL")
@@ -475,6 +631,9 @@ class DAL(alAlgo):
 
         self.opt = tf.keras.optimizers.Adam(lr=0.0001)
         self.loss = tf.keras.losses.categorical_crossentropy
+        #self.loss = tf.keras.losses.kl_divergence
+        # self.loss = tf.keras.losses.KLDivergence
+
 
     def getBinaryClassifier(self):
         model = Sequential(name="Binary Classifier")
@@ -546,13 +705,16 @@ class DAL(alAlgo):
             raise ValueError("Sample size n is larger than length of round's cache")
 
         # Calculate LC(x) values
-        yh_vals = yh.iloc[:, 1].values
+        yh1_vals = yh.iloc[:, 0].values
+        yh2_vals = yh.iloc[:, 1].values
+        yh_vals = np.absolute(yh1_vals-yh2_vals)
+
         yh_col_names = ["yh", "ID"]
         yh = pd.concat([pd.DataFrame(yh_vals), pd.DataFrame(cache)], axis=1)
         yh.columns = yh_col_names
 
         # Get ids of n largest LC vals
-        n_largest = yh.nlargest(n, 'yh')
+        n_largest = yh.nsmallest(n, 'yh')
         batch = n_largest["ID"].to_list()
 
         # Log which samples were used for that round
@@ -568,4 +730,627 @@ class DAL(alAlgo):
         return batch
 
 
+
+#######################################################
+
+
+class OC(alAlgo):
+    """
+    OC(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Custom active learning class, inherits alAlgo class.
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
+    """
+
+    def __init__(self,input_dim=None):
+        super().__init__(algo_name="OC")
+        self.predict_to_sample = False
+        self.feature_set = True
+        self.single_output = False
+
+        if input_dim == None:
+            raise ValueError("Must pass input dim as int to use DAL")
+        self.input_dim = input_dim
+        self.k = 500
+        self.opt = tf.keras.optimizers.RMSprop(lr=0.0001)
+        #self.loss = tf.keras.metrics.Mean()
+        self.loss = tf.keras.losses.categorical_crossentropy
+        self.model = self.getBinaryClassifier()
+
+    def getBinaryClassifier(self):
+        inputs = tf.keras.Input((self.input_dim,))
+        out = tf.keras.layers.Dense(self.k, activation='relu',use_bias=False, name='certificates')(inputs)
+        model = tf.keras.models.Model(inputs=[inputs], outputs=out, name='ONC')
+        return model
+
+    def grad(self, inputs):
+        with tf.GradientTape() as tape:
+            y_hat = self.model(inputs, training=True)
+
+            # compute the loss
+            #error = tf.math.reduce_mean(tf.math.square(y_hat))
+            error = self.loss(y_hat,tf.zeros(y_hat.shape)+.0001)
+            error = tf.cast(error, dtype=tf.dtypes.float64)
+
+            W = self.model.layers[1].get_weights()[0]  # Equation 4.
+            W = tf.linalg.matmul(tf.transpose(W), W)
+
+            W = tf.cast(W, dtype=tf.dtypes.float64)
+
+            penalty = tf.math.square(W - tf.eye(self.k, dtype=tf.dtypes.float64))*10
+            penalty = tf.math.reduce_mean(penalty)
+
+            error = error + penalty
+
+            loss_value = self.loss(y_hat,tf.zeros(y_hat.shape)+.0001)
+
+        return loss_value, tape.gradient(error, self.model.trainable_variables)
+
+    def trainBatch(self, inputs) -> float:
+        """ Calculates loss and gradients for batch of data and applies update to weights """
+        loss_value, grads = self.grad(inputs)
+        self.opt.apply_gradients(zip(grads, self.model.trainable_variables))
+
+        #self.model.layers[1].get_weights()[0] = tf.clip_by_value(self.model.layers[1].get_weights()[0],-.01,.01,)
+        return loss_value
+
+    def predict(self, inputs):
+        """ Used for predicting with model but does not have labels """
+        yh = self.model(inputs)
+        return yh
+
+    def trainBinaryClassifier(self,dataset,batch_size):
+        remainder_samples = dataset.shape[0] % batch_size # Calculate number of remainder samples from batches
+        total_loss= []
+
+        # Run batches
+        print("Training DALOC")
+        for i in tqdm(range(300)):
+            for batch in range(floor(dataset.shape[0] / batch_size)):
+                X = dataset[batch_size * batch:batch_size * (batch + 1),:]
+                loss = self.trainBatch(X)
+                total_loss.append(loss)
+
+            # Run remainders
+            if remainder_samples > 0:
+                X = dataset[(-1)*remainder_samples:,:]
+                loss = self.trainBatch(X)
+                total_loss.append(loss)
+
+
+        #val_avg_loss = sum(total_loss) / len(total_loss)
+        val_avg_loss = 0
+        print("DAL binary classifier loss: {}".format(val_avg_loss))
+
+    def inferBinaryClassifier(self,inputs):
+        yh = self.model(inputs)
+        return yh
+
+    def resetBinayClassifier(self):
+        pass
+
+    def __call__(self, cache: list, n: int, yh) -> list:
+
+        # Check if embedded cache, then cache is available for the round
+        if any(isinstance(i, list) for i in cache):
+            try:
+                cache = cache[self.round]
+            except:
+                raise ValueError("Active Learning Algo has iterated through each round\'s unlabled cache.")
+
+        # Check if sample size is to large for cache
+        if len(cache) < n:
+            raise ValueError("Sample size n is larger than length of round's cache")
+
+
+        # Calculate OC(x) values
+        yh_vals = yh.values
+
+        # Calculate epistemic uncertainty
+        scores = tf.math.reduce_mean(tf.math.square(yh_vals), axis=1).numpy()
+
+        yh_col_names = ["yh", "ID"]
+        yh = pd.concat([pd.DataFrame(scores), pd.DataFrame(cache)], axis=1)
+        yh.columns = yh_col_names
+
+        # Get ids
+        yh = yh.sort_values(by=['yh'])
+        #median_index = yh[yh["yh"] == yh["yh"].quantile(.95, interpolation='lower')]
+        #median_index = median_index.index.values[0]
+
+        #n_largest = list(random.sample(range(median_index, yh.shape[0]), n))
+        #n_largest = yh.iloc[n_largest,:]
+        n_largest = yh.iloc[-n:, :]
+        batch = n_largest["ID"].to_list()
+
+        # Log which samples were used for that round
+        self.sample_log[str(self.round)] = batch
+
+        print("\n")
+        print("Round {} selected samples: {}".format(self.round, batch))
+        print("\n")
+
+        # Increment round
+        self.round += 1
+
+        return batch
+
+
+#######################################################
+
+
+class AADA(alAlgo):
+    """
+    AADA(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Custom active learning class, inherits alAlgo class.
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
+    """
+
+    def __init__(self, input_dim=None):
+        super().__init__(algo_name="AADA")
+        self.predict_to_sample = False
+        self.feature_set = True
+        self.single_output = True
+
+        if input_dim == None:
+            raise ValueError("Must pass input dim as int to use AADA")
+        self.input_dim = input_dim
+        self.model = self.getBinaryClassifier()
+
+        self.opt = tf.keras.optimizers.RMSprop(lr=0.00005)
+        #self.loss = tf.keras.losses.categorical_crossentropy
+        self.loss = tf.keras.losses.mean_absolute_error
+
+    def getBinaryClassifier(self):
+        model = Sequential(name="AADA")
+        model.add(Dense(128, activation='elu',input_dim=self.input_dim))
+        #model.add(Dropout(.05))
+        model.add(Dense(1,activation='linear'))
+        #model.add(Dense(1, activation='linear'))
+        return model
+
+    def grad(self, inputs, targets):
+        with tf.GradientTape() as tape:
+            yh = self.model(inputs, training=True)
+            loss_value = tf.math.reduce_mean(targets*yh)
+
+            #x_source = inputs[0]
+            #x_target = inputs[1]
+
+            #yh_source = self.model(x_source, training=True)
+            #yh_target = self.model(x_target, training=True)
+
+            #loss_value = tf.math.reduce_mean(yh_source)
+            #loss_value = loss_value - tf.math.reduce_mean(yh_target)
+
+            #loss_value = tf.math.reduce_mean(tf.math.log(yh_source+.01))
+            #loss_value = -(loss_value + tf.math.reduce_mean(tf.math.log(1.01 - yh_target)))
+
+        return loss_value, tape.gradient(loss_value, self.model.trainable_variables)
+
+
+    def trainBatch(self, inputs, targets) -> float:
+        """ Calculates loss and gradients for batch of data and applies update to weights """
+        loss_value, grads = self.grad(inputs, targets)
+        self.opt.apply_gradients(zip(grads, self.model.trainable_variables))
+        return loss_value
+
+    @tf.function
+    def predict(self, inputs):
+        """ Used for predicting with model but does not have labels """
+        yh = self.model(inputs)
+        return yh
+
+    def trainBinaryClassifier(self, dataset, batch_size):
+        #source_data = dataset[0]
+        #target_data = dataset[1]
+        #remainder_samples = target_data.shape[0] % batch_size
+        remainder_samples = dataset.shape[0] % batch_size# Calculate number of remainder samples from batches
+        total_loss = []
+
+        # Run batches
+        print("Training AADA Classifier")
+        for i in tqdm(range(100)):
+            for batch in range(floor(dataset.shape[0] / batch_size)):
+                data = dataset[batch_size * batch:batch_size * (batch + 1),:]
+                X, y = data[:,:-1], data[:,-1]
+                loss = self.trainBatch(X, y)
+                total_loss.append(loss)
+
+            # Run remainders
+            if remainder_samples > 0:
+                data = dataset[(-1)*remainder_samples:,:]
+                X, y = data[:,:-1], data[:,-1]
+                loss = self.trainBatch(X, y)
+                total_loss.append(loss)
+
+            np.random.shuffle(dataset)
+
+            #total_loss = list(chain(*total_loss))
+            #val_avg_loss = sum(total_loss) / len(total_loss)
+            total_loss = []
+        print("DAL binary classifier loss: {}".format(0))
+
+    def inferBinaryClassifier(self, inputs):
+        yh = self.model(inputs)
+        return yh
+
+    def resetBinayClassifier(self):
+        pass
+
+    def __call__(self, cache: list, n: int, yh) -> list:
+
+        # Check if embedded cache, then cache is available for the round
+        if any(isinstance(i, list) for i in cache):
+            try:
+                cache = cache[self.round]
+            except:
+                raise ValueError("Active Learning Algo has iterated through each round\'s unlabled cache.")
+
+        # Check if sample size is to large for cache
+        if len(cache) < n:
+            raise ValueError("Sample size n is larger than length of round's cache")
+
+        # Calculate LC(x) values
+        yh_vals = yh.values
+        #yh_vals = (1-yh_vals)/yh_vals
+        yh_col_names = ["yh", "ID"]
+        yh = pd.concat([pd.DataFrame(yh_vals), pd.DataFrame(cache)], axis=1)
+        yh.columns = yh_col_names
+
+        print(yh_vals)
+
+        # Get ids of n largest LC vals
+        n_largest = yh.nlargest(n, 'yh')
+        #n_largest = yh.nsmallest(n, 'yh')
+        batch = n_largest["ID"].to_list()
+
+        # Log which samples were used for that round
+        self.sample_log[str(self.round)] = batch
+
+        print("\n")
+        print("Round {} selected samples: {}".format(self.round, batch))
+        print("\n")
+
+        # Increment round
+        self.round += 1
+
+        return batch
+
+
+#######################################################
+
+class DALOC(alAlgo):
+    """
+    DALOC(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    DALOC implementation trains a binary classifier to discern between unlabeled and labeled data.
+    OC's are also trained on the labeled data. The binary classifier takes in all of the unlabeled data
+    and then outputs softmax scores for uncertainty. I then select the top 90th quantile of values and
+    from there select the top 'n' values based on OC scores.
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
+    """
+
+    def __init__(self,input_dim=None):
+        super().__init__(algo_name="DALOC")
+        self.predict_to_sample = False
+        self.feature_set = True
+        self.single_output = False
+
+        if input_dim == None:
+            raise ValueError("Must pass input dim as int to use DAL")
+        self.input_dim = input_dim
+        self.k = 500
+        self.opt = tf.keras.optimizers.RMSprop(lr=0.001)
+
+        self.loss = tf.keras.losses.categorical_crossentropy
+        self.model = self.getBinaryClassifier()
+
+        self.OC = self.getOC()
+
+    def getBinaryClassifier(self):
+        model = Sequential(name="binary class")
+        model.add(Dense(128, activation='elu',input_dim=self.input_dim))
+        model.add(Dropout(.05))
+        model.add(Dense(2, activation='softmax'))
+        return model
+
+    def getOC(self):
+        inputs = tf.keras.Input((self.input_dim,))
+        out = tf.keras.layers.Dense(self.k, activation='relu',use_bias=False, name='certificates')(inputs)
+        model = tf.keras.models.Model(inputs=[inputs], outputs=out, name='OC')
+        return model
+
+    def gradOC(self, inputs):
+        with tf.GradientTape() as tape:
+            y_hat = self.OC(inputs, training=True)
+
+            # compute the loss
+            error = tf.math.reduce_mean(tf.math.square(y_hat))
+            error = tf.cast(error, dtype=tf.dtypes.float64)
+
+            W = self.OC.layers[1].get_weights()[0]  # Equation 4.
+            W = tf.linalg.matmul(tf.transpose(W), W)
+            W = tf.cast(W, dtype=tf.dtypes.float64)
+
+            penalty = tf.math.square(W - tf.eye(self.k, dtype=tf.dtypes.float64))*10
+            penalty = tf.math.reduce_mean(penalty)
+
+            error = error + penalty
+
+        return error, tape.gradient(error, self.OC.trainable_variables)
+
+
+    def grad(self, inputs, targets):
+        with tf.GradientTape() as tape:
+            loss_value = self.loss(self.model(inputs, training=True), targets)
+        return loss_value, tape.gradient(loss_value, self.model.trainable_variables)
+
+
+    def trainBatch(self, inputs, targets) -> float:
+        """ Calculates loss and gradients for batch of data and applies update to weights """
+        loss_value, grads = self.grad(inputs, targets)
+        self.opt.apply_gradients(zip(grads, self.model.trainable_variables))
+        return loss_value
+
+    def predict(self, inputs):
+        """ Used for predicting with model but does not have labels """
+        yh = self.model(inputs)
+        return yh
+
+    def trainOCBatch(self, inputs) -> float:
+        """ Calculates loss and gradients for batch of data and applies update to weights """
+        loss_value, grads = self.gradOC(inputs)
+        self.opt.apply_gradients(zip(grads, self.OC.trainable_variables))
+        return loss_value
+
+    def trainOC(self,dataset,batch_size):
+        remainder_samples = dataset.shape[0] % batch_size # Calculate number of remainder samples from batches
+        total_loss= []
+
+        # Run batches
+        print("Training OC")
+        for i in tqdm(range(300)):
+            for batch in range(floor(dataset.shape[0] / batch_size)):
+                X = dataset[batch_size * batch:batch_size * (batch + 1),:]
+                loss = self.trainOCBatch(X)
+                total_loss.append(loss)
+
+            # Run remainders
+            if remainder_samples > 0:
+                X = dataset[(-1)*remainder_samples:,:]
+                loss = self.trainOCBatch(X)
+                total_loss.append(loss)
+
+        val_avg_loss = sum(total_loss) / len(total_loss)
+        print("OC loss: {}".format(val_avg_loss))
+
+
+    def trainBinaryClassifier(self,dataset,batch_size):
+        remainder_samples = dataset.shape[0] % batch_size # Calculate number of remainder samples from batches
+        total_loss= []
+
+        # Run batches
+        print("Training DAL Binary Classifier")
+        for i in tqdm(range(50)):
+            for batch in range(floor(dataset.shape[0] / batch_size)):
+                data = dataset[batch_size * batch:batch_size * (batch + 1),:]
+                X, y = data[:,:-2], data[:,-2:]
+                loss = self.trainBatch(X, y)
+                total_loss.append(loss)
+
+            # Run remainders
+            if remainder_samples > 0:
+                data = dataset[(-1)*remainder_samples:,:]
+                X, y = data[:,:-2], data[:,-2:]
+                loss = self.trainBatch(X, y)
+                total_loss.append(loss)
+
+            total_loss = list(chain(*total_loss))
+            val_avg_loss = sum(total_loss) / len(total_loss)
+            total_loss = []
+        print("DAL binary classifier loss: {}".format(val_avg_loss))
+
+    def inferBinaryClassifier(self,inputs):
+        yh = self.model(inputs)
+        return yh
+
+    def inferOC(self,inputs):
+        yh = self.OC(inputs)
+        return yh
+
+    def resetBinayClassifier(self):
+        pass
+
+    def __call__(self, cache: list, n: int, yh) -> list:
+
+        # Check if embedded cache, then cache is available for the round
+        if any(isinstance(i, list) for i in cache):
+            try:
+                cache = cache[self.round]
+            except:
+                raise ValueError("Active Learning Algo has iterated through each round\'s unlabled cache.")
+
+        # Check if sample size is to large for cache
+        if len(cache) < n:
+            raise ValueError("Sample size n is larger than length of round's cache")
+
+
+        # Calculate OC(x) values
+        bc_vals = yh.iloc[:,1].values
+        oc_vals = yh.iloc[:,-1].values
+
+        yh_col_names = ["bc","oc", "ID"]
+        yh = pd.concat([pd.DataFrame(bc_vals),pd.DataFrame(oc_vals),pd.DataFrame(cache)], axis=1)
+        yh.columns = yh_col_names
+
+        # Get ids
+        yh = yh.sort_values(by=['bc'])
+        median_index = yh[yh["bc"] == yh["bc"].quantile(.95, interpolation='lower')]
+        median_index = median_index.index.values[0]
+        yh = yh.iloc[median_index:,:]
+
+        yh = yh.sort_values(by=['oc'])
+        n_largest = yh.nlargest(n, 'oc')
+        batch = n_largest["ID"].to_list()
+
+        # Log which samples were used for that round
+        self.sample_log[str(self.round)] = batch
+
+        print("\n")
+        print("Round {} selected samples: {}".format(self.round, batch))
+        print("\n")
+
+        # Increment round
+        self.round += 1
+
+        return batch
+
+
+#######################################################
+
+
+class SpectralNormalization(tf.keras.layers.Wrapper):
+    """Performs spectral normalization on weights.
+    This wrapper controls the Lipschitz constant of the layer by
+    constraining its spectral norm, which can stabilize the training of GANs.
+    See [Spectral Normalization for Generative Adversarial Networks](https://arxiv.org/abs/1802.05957).
+    ```python
+    net = SpectralNormalization(
+        tf.keras.layers.Conv2D(2, 2, activation="relu"),
+        input_shape=(32, 32, 3))(x)
+    net = SpectralNormalization(
+        tf.keras.layers.Conv2D(16, 5, activation="relu"))(net)
+    net = SpectralNormalization(
+        tf.keras.layers.Dense(120, activation="relu"))(net)
+    net = SpectralNormalization(
+        tf.keras.layers.Dense(n_classes))(net)
+    ```
+    Arguments:
+      layer: A `tf.keras.layers.Layer` instance that
+        has either `kernel` or `embeddings` attribute.
+      power_iterations: `int`, the number of iterations during normalization.
+    Raises:
+      AssertionError: If not initialized with a `Layer` instance.
+      ValueError: If initialized with negative `power_iterations`.
+      AttributeError: If `layer` does not has `kernel` or `embeddings` attribute.
+    """
+
+    @typechecked
+    def __init__(self, layer: tf.keras.layers, power_iterations: int = 1, **kwargs):
+        super().__init__(layer, **kwargs)
+        if power_iterations <= 0:
+            raise ValueError(
+                "`power_iterations` should be greater than zero, got "
+                "`power_iterations={}`".format(power_iterations)
+            )
+        self.power_iterations = power_iterations
+        self._initialized = False
+
+    def build(self, input_shape):
+        """Build `Layer`"""
+        super().build(input_shape)
+        input_shape = tf.TensorShape(input_shape)
+        self.input_spec = tf.keras.layers.InputSpec(shape=[None] + input_shape[1:])
+
+        if hasattr(self.layer, "kernel"):
+            self.w = self.layer.kernel
+        elif hasattr(self.layer, "embeddings"):
+            self.w = self.layer.embeddings
+        else:
+            raise AttributeError(
+                "{} object has no attribute 'kernel' nor "
+                "'embeddings'".format(type(self.layer).__name__)
+            )
+
+        self.w_shape = self.w.shape.as_list()
+
+        self.u = self.add_weight(
+            shape=(1, self.w_shape[-1]),
+            initializer=tf.initializers.TruncatedNormal(stddev=0.02),
+            trainable=False,
+            name="sn_u",
+            dtype=self.w.dtype,
+        )
+
+    def call(self, inputs, training=None):
+        """Call `Layer`"""
+        if training is None:
+            training = tf.keras.backend.learning_phase()
+
+        if training:
+            self.normalize_weights()
+
+        output = self.layer(inputs)
+        return output
+
+    def compute_output_shape(self, input_shape):
+        return tf.TensorShape(self.layer.compute_output_shape(input_shape).as_list())
+
+    @tf.function
+    def normalize_weights(self):
+        """Generate spectral normalized weights.
+        This method will update the value of `self.w` with the
+        spectral normalized value, so that the layer is ready for `call()`.
+        """
+
+        w = tf.reshape(self.w, [-1, self.w_shape[-1]])
+        u = self.u
+
+        with tf.name_scope("spectral_normalize"):
+            for _ in range(self.power_iterations):
+                v = tf.math.l2_normalize(tf.matmul(u, w, transpose_b=True))
+                u = tf.math.l2_normalize(tf.matmul(v, w))
+
+            sigma = tf.matmul(tf.matmul(v, w), u, transpose_b=True)
+
+            self.w.assign(self.w / sigma)
+            self.u.assign(u)
+
+    def get_config(self):
+        config = {"power_iterations": self.power_iterations}
+        base_config = super().get_config()
+        return {**base_config, **config}
 
