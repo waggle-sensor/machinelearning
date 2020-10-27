@@ -51,7 +51,8 @@ def main():
     #algo = algos.DALratio(input_dim=120)
     #algo = algos.AADA(input_dim=120)
     #algo = algos.DAL(input_dim=120)
-    algo = algos.DALOC(input_dim=120)
+    #algo = algos.DALOC(input_dim=120)
+    algo = algos.clusterDAL(input_dim=120)
     #algo = algos.uniformSample()
     algo.reset()
 

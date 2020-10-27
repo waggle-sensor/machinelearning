@@ -206,7 +206,8 @@ class Engine():
 
     def trainBatch(self, cycles, batch_size):
         """ Calls model to predict, gets error, apply gradients to update weights """
-        remainder_samples = len(self.dataClass.train_cache) % batch_size # Calculate number of remainder samples from batches
+        remainder_samples = len(
+            self.dataClass.train_cache) % batch_size  # Calculate number of remainder samples from batches
         total_loss = []
 
         # Run batches
@@ -217,9 +218,9 @@ class Engine():
                 loss = self.modelManager.modelObject.trainBatch(X, y)
                 total_loss.append(loss)
 
-         # Run remainders
+        # Run remainders
         if remainder_samples > 0:
-            batch_ids = self.dataClass.train_cache[(-1)*remainder_samples:]
+            batch_ids = self.dataClass.train_cache[(-1) * remainder_samples:]
             X, y = self.dataClass.getBatch(batch_ids)
             loss = self.modelManager.modelObject.trainBatch(X, y)
             total_loss.append(loss)
@@ -228,7 +229,8 @@ class Engine():
 
     def valTest(self, batch_size):
         """ Call model, get metrics of prediction """
-        remainder_samples = len(self.dataClass.val_cache) % batch_size  # Calculate number of remainder samples from batches
+        remainder_samples = len(
+            self.dataClass.val_cache) % batch_size  # Calculate number of remainder samples from batches
         total_loss = []
         total_scores = []
 
@@ -242,7 +244,7 @@ class Engine():
 
         # Run remainders
         if remainder_samples > 0:
-            batch_ids = self.dataClass.val_cache[(-1)*remainder_samples:]
+            batch_ids = self.dataClass.val_cache[(-1) * remainder_samples:]
             X, y = self.dataClass.getBatch(batch_ids)
             loss, scores, _ = self.modelManager.modelObject.eval(X, y)
             total_loss.append(loss)
@@ -268,7 +270,7 @@ class Engine():
 
         plt.show()
 
-    def evalCache(self, cache, batch_size,use_extractor=False):
+    def evalCache(self, cache, batch_size, use_extractor=False):
         """ Calls model and performs prediction and returns predictions """
         remainder_samples = len(cache) % batch_size  # Calculate number of remainder samples from batches
         predictions = []
@@ -286,7 +288,7 @@ class Engine():
 
         # Run remainders
         if remainder_samples > 0:
-            batch_ids = cache[(-1)*remainder_samples:]
+            batch_ids = cache[(-1) * remainder_samples:]
             X, y = self.dataClass.getBatch(batch_ids)
             if use_extractor == False:
                 _, _, yh = self.modelManager.modelObject.eval(X, y)
@@ -301,78 +303,77 @@ class Engine():
         if use_extractor == False:
             return np.concatenate(predictions, axis=0)
 
-    def evalAlgoClassClassifier(self,cache,unlabeled_pred,batch_size):
+    def evalAlgoClassClassifier(self, cache, unlabeled_pred, batch_size):
         remainder_samples = len(cache) % batch_size  # Calculate number of remainder samples from batches
         predictions = []
 
         # Run batches
         for batch in trange(floor(len(cache) / batch_size)):
-            X = unlabeled_pred[batch_size * batch:batch_size * (batch + 1),:]
+            X = unlabeled_pred[batch_size * batch:batch_size * (batch + 1), :]
             yh = self.algoClass.inferBinaryClassifier(X)
             predictions.append(yh)
 
         # Run remainders
         if remainder_samples > 0:
-            X = unlabeled_pred[(-1)*remainder_samples:,:]
+            X = unlabeled_pred[(-1) * remainder_samples:, :]
             yh = self.algoClass.inferBinaryClassifier(X)
             predictions.append(yh)
 
         return np.concatenate(predictions, axis=0)
 
-    def evalAlgoClassClassifierDALOC(self,cache,unlabeled_pred,batch_size):
+    def evalAlgoClassClassifierDALOC(self, cache, unlabeled_pred, batch_size):
         remainder_samples = len(cache) % batch_size  # Calculate number of remainder samples from batches
         predictions = []
 
         # Run batches
         for batch in trange(floor(len(cache) / batch_size)):
-            X = unlabeled_pred[batch_size * batch:batch_size * (batch + 1),:]
+            X = unlabeled_pred[batch_size * batch:batch_size * (batch + 1), :]
             yh = self.algoClass.inferBinaryClassifier(X)
             predictions.append(yh)
 
         # Run remainders
         if remainder_samples > 0:
-            X = unlabeled_pred[(-1)*remainder_samples:,:]
+            X = unlabeled_pred[(-1) * remainder_samples:, :]
             yh = self.algoClass.inferBinaryClassifier(X)
             predictions.append(yh)
 
-        bc_preds =  np.concatenate(predictions, axis=0)
+        bc_preds = np.concatenate(predictions, axis=0)
 
         predictions = []
         # Run batches
         for batch in trange(floor(len(cache) / batch_size)):
-            X = unlabeled_pred[batch_size * batch:batch_size * (batch + 1),:]
+            X = unlabeled_pred[batch_size * batch:batch_size * (batch + 1), :]
             yh = self.algoClass.inferOC(X)
             predictions.append(yh)
 
         # Run remainders
         if remainder_samples > 0:
-            X = unlabeled_pred[(-1)*remainder_samples:,:]
+            X = unlabeled_pred[(-1) * remainder_samples:, :]
             yh = self.algoClass.inferOC(X)
             predictions.append(yh)
 
         oc_preds = np.concatenate(predictions, axis=0)
-        oc_preds = np.sum(oc_preds,axis=1)
-        oc_preds = oc_preds.reshape(oc_preds.shape[0],1)
+        oc_preds = np.sum(oc_preds, axis=1)
+        oc_preds = oc_preds.reshape(oc_preds.shape[0], 1)
 
-        preds = np.hstack((bc_preds,oc_preds))
+        preds = np.hstack((bc_preds, oc_preds))
         return preds
 
-
-    def trainAlgoClassClasssifier(self,cache_df,batch_size):
+    def trainAlgoClassClasssifier(self, cache_df, batch_size):
         print("Training {} classifier".format(self.algoClass.algo_name))
         # 1. feed all samples through model and get second to last layer output
         self.extractor = tf.keras.Model(inputs=self.modelManager.modelObject.model.inputs,
-                                outputs=self.modelManager.modelObject.model.layers[-2].output,name="OC")
+                                        outputs=self.modelManager.modelObject.model.layers[-2].output, name="OC")
         print(self.extractor.summary())
 
         # 1a. feed through labeled cache and add [1,0] as target
-        labeled_pred = self.evalCache(self.dataClass.train_cache,batch_size,use_extractor=True)
+        labeled_pred = self.evalCache(self.dataClass.train_cache, batch_size, use_extractor=True)
         if self.algoClass.single_output == True:
             if self.algoClass.algo_name == "AADA":
-                labeled_targets = -1*np.ones((labeled_pred.shape[0], 1))
-                labeled_targets = labeled_targets.reshape(labeled_targets.shape[0],1)
+                labeled_targets = -1 * np.ones((labeled_pred.shape[0], 1))
+                labeled_targets = labeled_targets.reshape(labeled_targets.shape[0], 1)
         elif self.algoClass.single_output == False:
-            labeled_targets = np.hstack((np.ones((labeled_pred.shape[0],1)),np.zeros((labeled_pred.shape[0],1))))
+            labeled_targets = np.hstack((np.ones((labeled_pred.shape[0], 1)), np.zeros((labeled_pred.shape[0], 1))))
 
         # 1b. feed through unlabeled cache (or subset) and add [0,1]
         unlabeled_pred = self.evalCache(cache_df, batch_size, use_extractor=True)
@@ -381,43 +382,48 @@ class Engine():
                 unlabeled_targets = np.ones((unlabeled_pred.shape[0], 1))
                 unlabeled_targets = unlabeled_targets.reshape(unlabeled_targets.shape[0], 1)
         elif self.algoClass.single_output == False:
-            unlabeled_targets = np.hstack((np.zeros((unlabeled_pred.shape[0],1)),np.ones((unlabeled_pred.shape[0],1))))
-
+            unlabeled_targets = np.hstack(
+                (np.zeros((unlabeled_pred.shape[0], 1)), np.ones((unlabeled_pred.shape[0], 1))))
 
         # 2. Stack data and shuffle rows
         a = np.concatenate((labeled_pred, labeled_targets), axis=1)
         b = np.concatenate((unlabeled_pred, unlabeled_targets), axis=1)
-        temp_dataset = np.concatenate((a,b[:5000,:]),axis=0)
+        temp_dataset = np.concatenate((a, b), axis=0)
 
-        for i in range(50):
-            temp_dataset = np.concatenate((a, temp_dataset), axis=0)
-        np.random.shuffle(temp_dataset)
+        # for i in range(50):
+        #    temp_dataset = np.concatenate((a, temp_dataset), axis=0)
+        # np.random.shuffle(temp_dataset)
 
         # 3. train binary classifier
         if self.algoClass.algo_name == "OC":
             self.algoClass.trainBinaryClassifier(labeled_pred, labeled_pred.shape[0])
         elif self.algoClass.algo_name == "DALOC":
             # Train Orthonormal Certificats
-            self.algoClass.trainOC(labeled_pred,batch_size)
+            self.algoClass.trainOC(labeled_pred, batch_size)
             # Train binary classifier
             self.algoClass.trainBinaryClassifier(temp_dataset, batch_size)
-
         elif self.algoClass.algo_name == "AADA":
             self.algoClass.trainBinaryClassifier(temp_dataset, batch_size)
         else:
-            self.algoClass.trainBinaryClassifier(temp_dataset,batch_size)
+            self.algoClass.trainBinaryClassifier(temp_dataset, batch_size)
 
         # 4. feed unlabeled cache through binary classifier and save prediction ids
         if self.algoClass.algo_name == "DALOC":
-            yh = self.evalAlgoClassClassifierDALOC(cache_df,unlabeled_pred,batch_size)
+            yh = self.evalAlgoClassClassifierDALOC(cache_df, unlabeled_pred, batch_size)
+        elif self.algoClass.algo_name == "clusterDAL":
+            # Cluster feature extracts
+            clusters = self.algoClass.cluster(unlabeled_pred, cache_df)
+            yh = self.evalAlgoClassClassifier(cache_df, unlabeled_pred, batch_size)
         else:
-            yh = self.evalAlgoClassClassifier(cache_df,unlabeled_pred,batch_size)
+            yh = self.evalAlgoClassClassifier(cache_df, unlabeled_pred, batch_size)
 
-        ids = self.algoClass(cache_df, self.sample_size, pd.DataFrame(yh))
+        if self.algoClass.algo_name == "clusterDAL":
+            ids = self.algoClass(cache_df, self.sample_size, pd.DataFrame(yh),clusters)
+        else:
+            ids = self.algoClass(cache_df, self.sample_size, pd.DataFrame(yh))
 
         # 5. return back ids of top samples
         return ids
-
 
     def runCycle(self, batch_size, cycles):
         """ Subroutine for run where model is trained on batch from algo, metrics logged, and caches updated """
@@ -426,7 +432,7 @@ class Engine():
         # ------------------------------------
 
         # Get round unlabeled cache ids
-        #print("Active Learning training round: {}".format(self.round))
+        # print("Active Learning training round: {}".format(self.round))
 
         if self.dataClass.bins > 1:
             if self.round >= self.dataClass.bins:
@@ -443,7 +449,7 @@ class Engine():
             yh = pd.concat([pd.DataFrame(cache_df[:len(yh)]), pd.DataFrame(yh)], axis=1)
             ids = self.algoClass(cache_df, self.sample_size, yh)
         elif self.algoClass.feature_set == True:
-            ids = self.trainAlgoClassClasssifier(cache_df,batch_size)
+            ids = self.trainAlgoClassClasssifier(cache_df, batch_size)
         else:
             ids = self.algoClass(cache_df, self.sample_size)
 
@@ -577,11 +583,11 @@ class Engine():
                 self.plotLog([self.intialTrain_metric_log], xlabel, ylabel, title, "Train")
             input('press return to continue')
 
-    def saveModel(self,model_name=None):
+    def saveModel(self, model_name=None):
         if model_name == None:
             self.modelManager.modelObject.model.save('model')
         else:
             self.modelManager.modelObject.model.save(model_name)
 
-    def loadModel(self,model_name):
+    def loadModel(self, model_name):
         self.modelManager.modelObject.model = tf.keras.models.load_model(model_name)
