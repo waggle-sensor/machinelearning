@@ -35,7 +35,7 @@ def main():
     # | 1. Select data
     # | ---------------------------
 
-    for i in range(8):
+    for i in range(8,15):
         # DataManager parameters
         split = (.0015, .6985, .3)  # (train, val, unlabeled)
         bins = 1
@@ -53,8 +53,9 @@ def main():
         #algo = algos.AADA(input_dim=120)
         #algo = algos.DAL(input_dim=120)
         #algo = algos.DALOC(input_dim=120)
-        algo = algos.clusterDAL(input_dim=120)
+        #algo = algos.clusterDAL(input_dim=120)
         #algo = algos.uniformSample()
+        algo = algos.VAE(input_dim=120, codings_size=20)
         algo.reset()
 
         # | ----------------------------
@@ -83,7 +84,7 @@ def main():
         # Run active learning algo
         # Round is how many times the active learning algo samples
         # cycles is how many epochs the model is retrained each time a round occurs of sampling
-        engine.run(rounds=8, cycles=15, batch_size=32, val=True, plot=False)
+        engine.run(rounds=8, cycles=20, batch_size=32, val=True, plot=False)
         engine.saveLog(path="test_ "+str(i)+"_log.csv")
         dataClass.deleteCache()
 

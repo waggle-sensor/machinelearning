@@ -363,7 +363,7 @@ class Engine():
         print("Training {} classifier".format(self.algoClass.algo_name))
         # 1. feed all samples through model and get second to last layer output
         self.extractor = tf.keras.Model(inputs=self.modelManager.modelObject.model.inputs,
-                                        outputs=self.modelManager.modelObject.model.layers[-2].output, name="OC")
+                                        outputs=self.modelManager.modelObject.model.layers[-2].output, name="Extractor")
         print(self.extractor.summary())
 
         # 1a. feed through labeled cache and add [1,0] as target
@@ -397,6 +397,8 @@ class Engine():
         # 3. train binary classifier
         if self.algoClass.algo_name == "OC":
             self.algoClass.trainBinaryClassifier(labeled_pred, labeled_pred.shape[0])
+        elif self.algoClass.algo_name == "VAE":
+            self.algoClass.trainVAE(labeled_pred,labeled_pred.shape[0])
         elif self.algoClass.algo_name == "DALOC":
             # Train Orthonormal Certificats
             self.algoClass.trainOC(labeled_pred, batch_size)
@@ -417,6 +419,7 @@ class Engine():
         else:
             yh = self.evalAlgoClassClassifier(cache_df, unlabeled_pred, batch_size)
 
+        # Get ids
         if self.algoClass.algo_name == "clusterDAL":
             ids = self.algoClass(cache_df, self.sample_size, pd.DataFrame(yh),clusters)
         else:

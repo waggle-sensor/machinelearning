@@ -52,8 +52,9 @@ def main():
     #algo = algos.AADA(input_dim=120)
     #algo = algos.DAL(input_dim=120)
     #algo = algos.DALOC(input_dim=120)
-    algo = algos.clusterDAL(input_dim=120)
+    #algo = algos.clusterDAL(input_dim=120)
     #algo = algos.uniformSample()
+    algo = algos.VAE(input_dim=120,codings_size=20)
     algo.reset()
 
     # | ----------------------------
@@ -62,6 +63,7 @@ def main():
 
     modelName = "mnistCNN"  # Pick pre-made model
     metrics = [tf.keras.metrics.Accuracy(), tf.keras.metrics.KLDivergence()]
+    #metrics = [tf.keras.metrics.MeanSquaredError()]
     zk = zoo.zooKeeper(modelName, show_model=True, metrics=metrics)  # Load model and compile
 
     # | ----------------------------
@@ -82,7 +84,7 @@ def main():
     # Run active learning algo
     # Round is how many times the active learning algo samples
     # cycles is how many epochs the model is retrained each time a round occurs of sampling
-    engine.run(rounds=8, cycles=15, batch_size=32, val=True, plot=True)
+    engine.run(rounds=8, cycles=20, batch_size=32, val=True, plot=True)
     engine.saveLog(path="test_log.csv")
     dataClass.deleteCache()
 
