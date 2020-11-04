@@ -54,7 +54,7 @@ def main():
     #algo = algos.DALOC(input_dim=120)
     #algo = algos.clusterDAL(input_dim=120)
     #algo = algos.uniformSample()
-    algo = algos.VAE(input_dim=120,codings_size=20)
+    algo = algos.VAE(input_dim=120,codings_size=20,Beta=1)
     algo.reset()
 
     # | ----------------------------
