@@ -1391,34 +1391,87 @@ class clusterDAL(alAlgo):
 
 
 class Sampling(Layer):
+    """Uses (z_mean, z_log_var) to sample z, the vector encoding of input data."""
     def call(self, inputs):
-        mean, log_var = inputs
-        return tf.random.normal(tf.shape(log_var)) * tf.math.exp(log_var / 2) + mean
+        z_mean, z_log_var = inputs
+        batch = tf.shape(z_mean)[0]
+        dim = tf.shape(z_mean)[1]
+        epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
+        return z_mean + tf.exp(0.5 * z_log_var) * epsilon
 
-def rounded_accuracy(y_true, y_pred):
-    return tf.keras.metrics.binary_accuracy(tf.round(y_true), tf.round(y_pred))
 
 class modelVAE(tf.keras.Model):
+    def __init__(self, encoder, decoder, n_pixels, Beta=1, **kwargs):
+        super(modelVAE, self).__init__(**kwargs)
+        self.encoder = encoder
+        self.decoder = decoder
+        self.n_pixels = n_pixels
+        self.Beta = Beta
+
     def train_step(self, data):
-        # Unpack the data. Its structure depends on your model and
-        # on what you pass to `fit()`.
-        x, y = data
-
+        if isinstance(data, tuple):
+            data = data[0]
         with tf.GradientTape() as tape:
-            y_pred = self(x, training=True)  # Forward pass
-            # Compute the loss value
-            # (the loss function is configured in `compile()`)
-            loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
+            z_mean, z_log_var, z = self.encoder(data)
+            reconstruction = self.decoder(z)
+            reconstruction_loss = tf.reduce_mean(
+                tf.keras.losses.binary_crossentropy(data, reconstruction)
+            )
+            reconstruction_loss *= self.n_pixels
+            kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
+            kl_loss = tf.reduce_mean(kl_loss)
+            kl_loss *= -0.5
+            total_loss = reconstruction_loss + kl_loss * self.Beta
+        grads = tape.gradient(total_loss, self.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+        return {
+            "loss": total_loss,
+            "reconstruction_loss": reconstruction_loss,
+            "kl_loss": kl_loss,
+        }
 
-        # Compute gradients
-        trainable_vars = self.trainable_variables
-        gradients = tape.gradient(loss, trainable_vars)
-        # Update weights
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-        # Update metrics (includes the metric that tracks the loss)
-        self.compiled_metrics.update_state(y, y_pred)
-        # Return a dict mapping metric names to current value
-        return {m.name: m.result() for m in self.metrics}
+    def test_step(self, data):
+        if isinstance(data, tuple):
+            data = data[0]
+        z_mean, z_log_var, z = self.encoder(data)
+        reconstruction = self.decoder(z)
+        reconstruction_loss = tf.reduce_mean(
+            tf.keras.losses.binary_crossentropy(data, reconstruction)
+        )
+        reconstruction_loss *= self.n_pixels
+        kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
+        kl_loss = tf.reduce_mean(kl_loss)
+        kl_loss *= -0.5
+        total_loss = reconstruction_loss + kl_loss * self.Beta
+        return {
+            "loss": total_loss,
+            "reconstruction_loss": reconstruction_loss,
+            "kl_loss": kl_loss,
+        }
+
+    def call(self, inputs):
+        z_mean, z_log_var, z = self.encoder(inputs)
+        reconstruction = self.decoder(z)
+        return reconstruction
+
+"""
+  def call(self, inputs):
+      z_mean, z_log_var, z = encoder(inputs)
+      reconstruction = decoder(z)
+      reconstruction_loss = tf.reduce_mean(
+          keras.losses.binary_crossentropy(inputs, reconstruction)
+      )
+      reconstruction_loss *= 28 * 28
+      kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
+      kl_loss = tf.reduce_mean(kl_loss)
+      kl_loss *= -0.5
+      total_loss = reconstruction_loss + kl_loss
+      self.add_metric(kl_loss, name='kl_loss', aggregation='mean')
+      self.add_metric(total_loss, name='total_loss', aggregation='mean')
+      self.add_metric(reconstruction_loss, name='reconstruction_loss', aggregation='mean')
+      return reconstruction
+"""
+
 
 class VAE(alAlgo):
     """
@@ -1442,7 +1495,7 @@ class VAE(alAlgo):
         to be called to pick which samples to return based on algo criteria.
     """
 
-    def __init__(self, input_dim=None, codings_size=10):
+    def __init__(self, input_dim=None, codings_size=10, Beta=1):
         super().__init__(algo_name="VAE")
         self.predict_to_sample = False
         self.feature_set = True
@@ -1451,48 +1504,37 @@ class VAE(alAlgo):
         if input_dim == None:
             raise ValueError("Must pass input dim as int to use DAL")
         self.input_dim = input_dim
-        self.codings_size = codings_size
+        self.latent_dim = codings_size
 
-        self.opt = tf.keras.optimizers.RMSprop(lr=0.0001)
-        #self.model = self.getVAE()
+        self.opt = tf.keras.optimizers.RMSprop(lr=0.001)
+        self.Beta = Beta
 
     def getVAE(self):
-        inputs = tf.keras.Input((self.input_dim,))
-        z = Dense(80, activation="selu")(inputs)
-        z = Dense(40, activation="selu")(z)
-        z = Dense(20, activation="selu")(z)
-        codings_mean = Dense(self.codings_size)(z)
-        codings_log_var = Dense(self.codings_size)(z)
-        codings = Sampling()([codings_mean, codings_log_var])
-        encoder = tf.keras.models.Model(
-            inputs=[inputs], outputs=[codings_mean, codings_log_var, codings])
+        encoder_inputs = tf.keras.Input((self.input_dim,))
+        x = Dense(80, activation="selu")(encoder_inputs)
+        x = Dense(40, activation="selu")(x)
+        x = Dense(20, activation="selu")(x)
+        z_mean = Dense(self.latent_dim, name="z_mean")(x)
+        z_log_var = Dense(self.latent_dim, name="z_log_var")(x)
+        z = Sampling()([z_mean, z_log_var])
+        encoder = tf.keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
 
-        decoder_inputs = Input(shape=[self.codings_size])
-        x = Dense(20, activation="selu")(decoder_inputs)
+        latent_inputs = Input(shape=[self.latent_dim])
+        x = Dense(20, activation="selu")(latent_inputs)
         x = Dense(40, activation="selu")(x)
         x = Dense(80, activation="selu")(x)
-        outputs = Dense(self.input_dim,)(x)
-        decoder = tf.keras.models.Model(inputs=[decoder_inputs], outputs=[outputs])
+        decoder_outputs = Dense(self.input_dim,)(x)
+        decoder = tf.keras.models.Model(inputs=[latent_inputs], outputs=[decoder_outputs])
 
-        _, _, codings = encoder(inputs)
-        reconstructions = decoder(codings)
-
-        vae = modelVAE(inputs=[inputs], outputs=[reconstructions])
-
-        # sum is to compute latent loss for each instance in the batch
-        latent_loss = -0.5 * tf.math.reduce_sum(
-            1 + codings_log_var - tf.math.exp(codings_log_var) - tf.math.square(codings_mean),
-            axis=-1)
-
-        vae.add_loss(tf.math.reduce_mean(latent_loss) / self.input_dim)
-        #vae.compile(loss="binary_crossentropy", optimizer=self.opt, metrics=[tf.keras.metrics.MeanAbsoluteError()])
-        vae.compile(loss="mse", optimizer=self.opt, metrics=[tf.keras.metrics.MeanAbsoluteError()])
+        vae = modelVAE(encoder, decoder, self.input_dim, Beta=self.Beta)
+        vae.compile(optimizer=self.opt)
 
         return vae
 
     def trainBatch(self, inputs) -> float:
         """ Calculates loss and gradients for batch of data and applies update to weights """
-        loss_value = self.model.train_on_batch(inputs,inputs)
+        loss_value = self.model.train_on_batch(inputs)
+        print(loss_value)
         return loss_value
 
     def predict(self, inputs):
@@ -1502,29 +1544,7 @@ class VAE(alAlgo):
 
     def trainVAE(self, dataset, batch_size):
         self.model = self.getVAE()
-        remainder_samples = dataset.shape[0] % batch_size  # Calculate number of remainder samples from batches
-        elbo_loss = []
-        r_loss = []
-
-        # Run batches
-        print("Training VAE")
-        for i in tqdm(range(50)):
-            for batch in range(floor(dataset.shape[0] / batch_size)):
-                X = dataset[batch_size * batch:batch_size * (batch + 1), :]
-                loss = self.trainBatch(X)
-                elbo_loss.append(loss[0])
-                r_loss.append(loss[1])
-
-            # Run remainders
-            if remainder_samples > 0:
-                X = dataset[(-1) * remainder_samples:, :]
-                loss = self.trainBatch(X)
-                elbo_loss.append(loss[0])
-                r_loss.append(loss[1])
-
-        val_avg_elbo_loss = sum(elbo_loss) / len(elbo_loss)
-        val_avg_r_loss = sum(r_loss) / len(r_loss)
-        print("VAE total loss: {}, Reconstruction loss: {}".format(val_avg_elbo_loss,val_avg_r_loss))
+        self.model.fit(dataset,epochs=30,batch_size=batch_size)
 
     def inferBinaryClassifier(self, inputs):
         yh = self.model(inputs)
