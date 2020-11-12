@@ -19,7 +19,7 @@ class zooKeeper():
 
         self.getModel(show_model)
 
-    def getModel(self, show_model):
+    def getModel(self, show_model=False):
         try:
             print("-" * 20)
             print("Preparing model {}".format(self.modelName))

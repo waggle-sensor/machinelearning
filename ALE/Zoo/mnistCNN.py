@@ -51,13 +51,13 @@ class mnistCNN(customModel):
 
         # Optimizer for the model, takes optimizers from tf.keras.optimizers
         if optimizer == None:
-            self.opt = tf.keras.optimizers.Adam(lr=0.001)
+            self.opt = tf.keras.optimizers.Adam(lr=0.0002)
         else:
             self.opt = optimizer
 
         # Metrics for model
         if metrics == None:
-            print("didnt get metrics list")
+            print("didn't get metrics list")
             self.metrics = [tf.keras.metrics.MeanSquaredError()]
         else:
             self.metrics = metrics
@@ -74,15 +74,14 @@ class mnistCNN(customModel):
         """ Creates tf.keras model and returns it. Change model architecture here """
 
         model = Sequential(name="mnistCNN")
-        model.add(Conv2D(16, kernel_size=(5, 5), strides=(1, 1),
-                         activation='relu',
-                         input_shape=self.input_shape))
-        model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-        model.add(Conv2D(32, (5, 5), activation='relu'))
+        model.add(SeparableConv2D(32, (3, 3), activation='relu', input_shape=self.input_shape))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(SeparableConv2D(64, (3, 3), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Flatten())
-        model.add(Dense(120, activation='relu'))
-        model.add(Dense(self.num_classes, activation='softmax'))
+        model.add(Dense(128, activation='relu', name='embedding'))
+        model.add(Dropout(0.5))
+        model.add(Dense(10, activation='softmax', name='softmax'))
 
         print("Successfully built the model")
 

@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.layers import *
 from tensorflow.keras import Sequential
+from tensorflow.keras import regularizers
 from Zoo.zoo import customModel
 
 
@@ -74,15 +75,22 @@ class cifar10CNN(customModel):
         """ Creates tf.keras model and returns it. Change model architecture here """
 
         model = Sequential(name="cifar10CNN")
-        model.add(Conv2D(16, kernel_size=(5, 5), strides=(2, 2),
-                         activation='elu',
-                         input_shape=self.input_shape))
-        model.add(MaxPooling2D(pool_size=(2, 2), strides=(1, 1)))
-        model.add(Conv2D(32, (2, 2), activation='elu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(SeparableConv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same',
+                         input_shape=(32, 32, 3)))
+        model.add(SeparableConv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'))
+        model.add(MaxPooling2D((2, 2)))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.2))
+        model.add(SeparableConv2D(64, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'))
+        model.add(SeparableConv2D(64, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'))
+        model.add(MaxPooling2D((2, 2)))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.2))
         model.add(Flatten())
-        model.add(Dense(120, activation='elu'))
-        model.add(Dense(self.num_classes, activation='softmax'))
+        model.add(Dense(128, activation='relu', kernel_initializer='he_uniform'))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.2))
+        model.add(Dense(10, activation='softmax'))
 
         print("Successfully built the model")
 
