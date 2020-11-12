@@ -8,6 +8,7 @@ from random import shuffle
 from itertools import chain
 from tqdm import trange
 import matplotlib.pyplot as plt
+import random
 
 
 #######################################################
@@ -209,11 +210,15 @@ class Engine():
         remainder_samples = len(
             self.dataClass.train_cache) % batch_size  # Calculate number of remainder samples from batches
         total_loss = []
+        shuffle_cache = list(self.dataClass.train_cache)
+        random.shuffle(shuffle_cache)
+
 
         # Run batches
         for i in range(cycles):
             for batch in trange(floor(len(self.dataClass.train_cache) / batch_size)):
                 batch_ids = self.dataClass.train_cache[batch_size * batch:batch_size * (batch + 1)]
+                #batch_ids = shuffle_cache[batch_size * batch:batch_size * (batch + 1)]
                 X, y = self.dataClass.getBatch(batch_ids)
                 loss = self.modelManager.modelObject.trainBatch(X, y)
                 total_loss.append(loss)
@@ -221,6 +226,7 @@ class Engine():
         # Run remainders
         if remainder_samples > 0:
             batch_ids = self.dataClass.train_cache[(-1) * remainder_samples:]
+            #batch_ids = shuffle_cache[(-1) * remainder_samples:]
             X, y = self.dataClass.getBatch(batch_ids)
             loss = self.modelManager.modelObject.trainBatch(X, y)
             total_loss.append(loss)
@@ -397,8 +403,24 @@ class Engine():
         # 3. train binary classifier
         if self.algoClass.algo_name == "OC":
             self.algoClass.trainBinaryClassifier(labeled_pred, labeled_pred.shape[0])
-        elif self.algoClass.algo_name == "VAE":
-            self.algoClass.trainVAE(labeled_pred,labeled_pred.shape[0])
+        elif self.algoClass.algo_name == "MemAE_Binary":
+            # First train MemAE on labeled data
+            self.algoClass.trainVAE(labeled_pred, batch_size)
+
+            # Make MemAE augmented dataset
+            _, labeled_MemAE_data, _ = self.algoClass.model(labeled_pred)
+            _, unlabeled_MemAE_data, _ = self.algoClass.model(unlabeled_pred)
+            #labeled_MemAE_data, _, _ = self.algoClass.model(labeled_pred)
+            #unlabeled_MemAE_data, _, _ = self.algoClass.model(unlabeled_pred)
+            a = np.concatenate((labeled_MemAE_data, labeled_targets), axis=1)
+            b = np.concatenate((unlabeled_MemAE_data, unlabeled_targets), axis=1)
+            MemAE_dataset = np.concatenate((a, b), axis=0)
+            np.random.shuffle(MemAE_dataset)
+
+            # Train binary classifier
+            self.algoClass.trainBC(MemAE_dataset, batch_size)
+        elif self.algoClass.algo_name == "VAE" or self.algoClass.algo_name == "MemAE AL":
+            self.algoClass.trainVAE(labeled_pred, batch_size)
         elif self.algoClass.algo_name == "DALOC":
             # Train Orthonormal Certificats
             self.algoClass.trainOC(labeled_pred, batch_size)
@@ -416,12 +438,14 @@ class Engine():
             # Cluster feature extracts
             clusters = self.algoClass.cluster(unlabeled_pred, cache_df)
             yh = self.evalAlgoClassClassifier(cache_df, unlabeled_pred, batch_size)
+        elif self.algoClass.algo_name == "MemAE_Binary":
+            yh = self.evalAlgoClassClassifier(cache_df, unlabeled_MemAE_data, batch_size)
         else:
             yh = self.evalAlgoClassClassifier(cache_df, unlabeled_pred, batch_size)
 
         # Get ids
         if self.algoClass.algo_name == "clusterDAL":
-            ids = self.algoClass(cache_df, self.sample_size, pd.DataFrame(yh),clusters)
+            ids = self.algoClass(cache_df, self.sample_size, pd.DataFrame(yh), clusters)
         else:
             ids = self.algoClass(cache_df, self.sample_size, pd.DataFrame(yh))
 
@@ -459,7 +483,7 @@ class Engine():
         # Manage new labels within caches
         self.dataClass.train_cache.extend(ids)  # Add new ids to train cache
 
-        shuffle(self.dataClass.train_cache)  # Shuffle new dataClass.train_cache
+        #shuffle(self.dataClass.train_cache)  # Shuffle new dataClass.train_cache
 
         # Remove new ids from unlabeled caches: (two cases) one or multiple unlabeled caches
         if self.dataClass.bins > 1:
@@ -474,6 +498,15 @@ class Engine():
         # ------------------------------------
         # 2. Train and log
         # ------------------------------------
+
+        # Test restart model
+
+        #     ^
+        #   _| |_
+        #  |{   }|
+        self.modelManager.getModel()
+
+
         total_loss = self.trainBatch(cycles, batch_size)
         total_loss = list(chain(*total_loss))
         avg_loss = sum(total_loss) / len(total_loss)
