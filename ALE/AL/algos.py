@@ -8,6 +8,7 @@ from math import floor
 from itertools import chain
 
 import tensorflow as tf
+from tensorflow.keras import layers
 from tensorflow.keras.layers import *
 from tensorflow.keras import Sequential
 from tensorflow.keras import regularizers
@@ -15,6 +16,8 @@ from typeguard import typechecked
 
 from sklearn.cluster import KMeans, SpectralClustering, MiniBatchKMeans
 
+
+import matplotlib.pyplot as plt
 
 #######################################################
 
@@ -482,15 +485,14 @@ class DAL(alAlgo):
         self.input_dim = input_dim
         self.model = self.getBinaryClassifier()
 
-        self.opt = tf.keras.optimizers.RMSprop(lr=0.001)
-        # self.loss = tf.keras.losses.categorical_crossentropy
-        self.loss = tf.keras.losses.kl_divergence
+        self.opt = tf.keras.optimizers.Adam(lr=0.0001)
+        self.loss = tf.keras.losses.categorical_crossentropy
+        # self.loss = tf.keras.losses.kl_divergence
 
     def getBinaryClassifier(self):
         model = Sequential(name="BC")
-        model.add(Dense(128, activation='elu', input_dim=self.input_dim))
-        model.add(Dropout(.1))
-        model.add(LayerNormalization(axis=1))
+        model.add(Dense(120, activation='relu', input_dim=self.input_dim))
+        model.add(Dense(60, activation='relu'))
         model.add(Dense(2, activation='softmax'))
 
         return model
@@ -517,6 +519,9 @@ class DAL(alAlgo):
     def trainBinaryClassifier(self, dataset, batch_size):
         remainder_samples = dataset.shape[0] % batch_size  # Calculate number of remainder samples from batches
         total_loss = []
+
+        # Test resetting binary classifier each round
+        #self.model = self.getBinaryClassifier()
 
         # Run batches
         print("Training DAL Binary Classifier")
@@ -1392,6 +1397,7 @@ class clusterDAL(alAlgo):
 
 class Sampling(Layer):
     """Uses (z_mean, z_log_var) to sample z, the vector encoding of input data."""
+
     def call(self, inputs):
         z_mean, z_log_var = inputs
         batch = tf.shape(z_mean)[0]
@@ -1454,24 +1460,6 @@ class modelVAE(tf.keras.Model):
         reconstruction = self.decoder(z)
         return reconstruction
 
-"""
-  def call(self, inputs):
-      z_mean, z_log_var, z = encoder(inputs)
-      reconstruction = decoder(z)
-      reconstruction_loss = tf.reduce_mean(
-          keras.losses.binary_crossentropy(inputs, reconstruction)
-      )
-      reconstruction_loss *= 28 * 28
-      kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
-      kl_loss = tf.reduce_mean(kl_loss)
-      kl_loss *= -0.5
-      total_loss = reconstruction_loss + kl_loss
-      self.add_metric(kl_loss, name='kl_loss', aggregation='mean')
-      self.add_metric(total_loss, name='total_loss', aggregation='mean')
-      self.add_metric(reconstruction_loss, name='reconstruction_loss', aggregation='mean')
-      return reconstruction
-"""
-
 
 class VAE(alAlgo):
     """
@@ -1523,7 +1511,7 @@ class VAE(alAlgo):
         x = Dense(20, activation="selu")(latent_inputs)
         x = Dense(40, activation="selu")(x)
         x = Dense(80, activation="selu")(x)
-        decoder_outputs = Dense(self.input_dim,)(x)
+        decoder_outputs = Dense(self.input_dim, )(x)
         decoder = tf.keras.models.Model(inputs=[latent_inputs], outputs=[decoder_outputs])
 
         vae = modelVAE(encoder, decoder, self.input_dim, Beta=self.Beta)
@@ -1544,12 +1532,12 @@ class VAE(alAlgo):
 
     def trainVAE(self, dataset, batch_size):
         self.model = self.getVAE()
-        self.model.fit(dataset,epochs=30,batch_size=batch_size)
+        self.model.fit(dataset, epochs=15, batch_size=batch_size)
 
     def inferBinaryClassifier(self, inputs):
         yh = self.model(inputs)
-        yh = np.abs(yh-inputs)
-        yh = np.sum(yh,axis=-1)
+        yh = np.abs(yh - inputs)
+        yh = np.sum(yh, axis=-1)
         return yh
 
     def resetBinayClassifier(self):
@@ -1577,10 +1565,12 @@ class VAE(alAlgo):
 
         # Get ids
         yh = yh.sort_values(by=['yh'])
-        yh_vals = yh.iloc[:,0].values
-        yh_dist = yh_vals/np.sum(yh_vals)
-        cache = yh.iloc[:,1].values
-        batch = np.random.choice(cache, n, p=yh_dist,replace=False)
+        yh_vals = yh.iloc[:, 0].values
+        yh_dist = yh_vals / np.sum(yh_vals)
+        cache = yh.iloc[:, 1].values
+        # n_largest = yh.nlargest(n, 'yh')
+        # batch = n_largest["ID"].to_list()
+        batch = np.random.choice(cache, n, p=yh_dist, replace=False)
 
         # Log which samples were used for that round
         self.sample_log[str(self.round)] = batch
@@ -1594,6 +1584,329 @@ class VAE(alAlgo):
 
         return batch
 
+
+#######################################################
+
+
+class MemAE(tf.keras.Model):
+    def __init__(self, encoder, decoder, **kwargs):
+        super(MemAE, self).__init__(**kwargs)
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def train_step(self, x):
+        with tf.GradientTape() as tape:
+            z_hat, w_hat = self.encoder(x)
+            x_hat = self.decoder(z_hat)
+
+            mse = tf.reduce_sum(tf.square(x - x_hat))
+            mem_etrp = tf.reduce_sum((-w_hat) * tf.math.log(w_hat + 1e-12))
+
+            loss = tf.reduce_mean(mse + (0.0002 * mem_etrp))
+
+        grads = tape.gradient(loss, self.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+        return {"loss": loss}
+
+    def test_step(self, data):
+        x, y = data[0], data[1]
+        z_hat, w_hat = self.encoder(x)
+        x_hat = self.decoder(z_hat)
+
+        mse = tf.reduce_sum(tf.square(x - x_hat))
+        mem_etrp = tf.reduce_sum((-w_hat) * tf.math.log(w_hat + 1e-12))
+        loss = tf.reduce_mean(mse + (0.0002 * mem_etrp))
+
+        return {"loss": loss}
+
+    def call(self, inputs):
+        z_hat, w_hat = self.encoder(inputs)
+        x_hat = self.decoder(z_hat)
+        return x_hat, z_hat, w_hat
+
+
+class Memory(layers.Layer):
+    def __init__(self, mem_dim, fea_dim):
+        super(Memory, self).__init__()
+        self.mem_dim = mem_dim
+        self.fea_dim = fea_dim
+
+        w_init = tf.random_normal_initializer()
+        self.w = tf.Variable(
+            initial_value=w_init(shape=(self.mem_dim, self.fea_dim), dtype="float32"),
+            trainable=True,
+        )
+
+    def cosine_sim(self, x1, x2):
+        num = tf.linalg.matmul(x1, tf.transpose(x2, perm=[1, 0]))
+        denom = tf.linalg.matmul(x1 ** 2, tf.transpose(x2, perm=[1, 0]) ** 2)
+        w = (num + 1e-12) / (denom + 1e-12)
+        return w
+
+    def call(self, z):
+        cosim = self.cosine_sim(x1=z, x2=self.w)
+        atteniton = tf.nn.softmax(cosim)
+
+        lam = 1 / self.mem_dim  # deactivate the 1/N of N memories.
+
+        addr_num = tf.keras.activations.relu(atteniton - lam) * atteniton
+        addr_denum = tf.abs(atteniton - lam) + 1e-12
+        memory_addr = addr_num / addr_denum
+        renorm = tf.clip_by_value(memory_addr, 1e-12, 1 - (1e-12))
+        z_hat = tf.linalg.matmul(renorm, self.w)
+
+        return z_hat, renorm
+
+
+class MemAE_AL(alAlgo):
+    """
+    MemAE(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Custom active learning class, inherits alAlgo class.
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
+    """
+
+    def __init__(self, input_dim=None, codings_size=10):
+        super().__init__(algo_name="MemAE AL")
+        self.predict_to_sample = False
+        self.feature_set = True
+        self.single_output = False
+
+        if input_dim == None:
+            raise ValueError("Must pass input dim as int to use DAL")
+        self.input_dim = input_dim
+        self.latent_dim = codings_size
+
+        self.opt = tf.keras.optimizers.RMSprop(lr=0.001)
+
+    def getMemAE(self):
+        encoder_inputs = tf.keras.Input((self.input_dim,))
+        x = Dense(80, activation="selu")(encoder_inputs)
+        x = Dense(40, activation="selu")(x)
+        x = Dense(self.latent_dim, activation="selu")(x)
+        z_hat, att = Memory(300, self.latent_dim)(x)
+        encoder = tf.keras.Model(encoder_inputs, [z_hat, att], name="encoder")
+
+        latent_inputs = tf.keras.Input(shape=(self.latent_dim))
+        x = layers.Dense(self.latent_dim, activation="selu")(latent_inputs)
+        x = layers.Dense(40, activation="selu")(x)
+        x = layers.Dense(80, activation="selu")(x)
+        decoder_outputs = layers.Dense(120, activation="selu")(x)
+        decoder = tf.keras.Model(latent_inputs, decoder_outputs, name="decoder")
+
+        model = MemAE(encoder, decoder)
+        model.compile(optimizer=tf.keras.optimizers.Adam())
+
+        return model
+
+    def trainBatch(self, inputs) -> float:
+        """ Calculates loss and gradients for batch of data and applies update to weights """
+        loss_value = self.model.train_on_batch(inputs)
+        print(loss_value)
+        return loss_value
+
+    def predict(self, inputs):
+        """ Used for predicting with model but does not have labels """
+        yh = self.model(inputs)
+        return yh
+
+    def trainVAE(self, dataset, batch_size):
+        self.model = self.getMemAE()
+        self.model.fit(dataset, epochs=25, batch_size=batch_size)
+
+    def inferBinaryClassifier(self, inputs):
+        yh, _, _ = self.model(inputs)
+        # yh = np.abs(yh - inputs)
+        # yh = np.sum(yh, axis=-1)
+        # Paper says to use mse as ranking for outliers
+        yh = np.square(yh - inputs)
+        yh = np.mean(yh, axis=-1)
+        return yh
+
+    def __call__(self, cache: list, n: int, yh) -> list:
+
+        # Check if embedded cache, then cache is available for the round
+        if any(isinstance(i, list) for i in cache):
+            try:
+                cache = cache[self.round]
+            except:
+                raise ValueError("Active Learning Algo has iterated through each round\'s unlabled cache.")
+
+        # Check if sample size is to large for cache
+        if len(cache) < n:
+            raise ValueError("Sample size n is larger than length of round's cache")
+
+        # Calculate values
+        yh_vals = yh.values
+
+        yh_col_names = ["yh", "ID"]
+        yh = pd.concat([pd.DataFrame(yh_vals), pd.DataFrame(cache)], axis=1)
+        yh.columns = yh_col_names
+
+        # Get ids
+        yh = yh.sort_values(by=['yh'])
+        # yh_vals = yh.iloc[:,0].values
+        # yh_dist = yh_vals/np.sum(yh_vals)
+        # cache = yh.iloc[:,1].values
+        n_largest = yh.nlargest(n, 'yh')
+        batch = n_largest["ID"].to_list()
+        # batch = np.random.choice(cache, n, p=yh_dist,replace=False)
+
+        # Log which samples were used for that round
+        self.sample_log[str(self.round)] = batch
+
+        print("\n")
+        print("Round {} selected samples: {}".format(self.round, batch))
+        print("\n")
+
+        # Increment round
+        self.round += 1
+
+        return batch
+
+
+class MemAE_Binary_AL(alAlgo):
+    """
+    MemAE(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Custom active learning class, inherits alAlgo class.
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
+    """
+
+    def __init__(self, input_dim=None, codings_size=10):
+        super().__init__(algo_name="MemAE_Binary")
+        self.predict_to_sample = False
+        self.feature_set = True
+        self.single_output = False
+
+        if input_dim == None:
+            raise ValueError("Must pass input dim as int to use DAL")
+        self.input_dim = input_dim
+        self.latent_dim = codings_size
+
+        self.opt = tf.keras.optimizers.RMSprop(lr=0.001)
+
+    def getMemAE(self):
+        encoder_inputs = tf.keras.Input((self.input_dim,))
+        x = Dense(80, activation="selu")(encoder_inputs)
+        x = Dense(40, activation="selu")(x)
+        x = Dense(self.latent_dim, activation="selu")(x)
+        z_hat, att = Memory(500, self.latent_dim)(x)
+        encoder = tf.keras.Model(encoder_inputs, [z_hat, att], name="encoder")
+
+        latent_inputs = tf.keras.Input(shape=(self.latent_dim))
+        x = layers.Dense(30, activation="selu")(latent_inputs)
+        x = layers.Dense(40, activation="selu")(x)
+        x = layers.Dense(80, activation="selu")(x)
+        decoder_outputs = layers.Dense(self.input_dim, activation="selu")(x)
+        decoder = tf.keras.Model(latent_inputs, decoder_outputs, name="decoder")
+
+        model = MemAE(encoder, decoder)
+        model.compile(optimizer=tf.keras.optimizers.Adam())
+
+        return model
+
+    def getBinaryClassifier(self):
+        model = Sequential(name="BC")
+        model.add(Dense(15, activation='elu', input_dim=self.latent_dim))
+        model.add(Dropout(.1))
+        model.add(Dense(2, activation='softmax'))
+        model.compile(optimizer=self.opt, loss=tf.keras.losses.BinaryCrossentropy())
+        return model
+
+    def trainBatch(self, inputs) -> float:
+        """ Calculates loss and gradients for batch of data and applies update to weights """
+        loss_value = self.model.train_on_batch(inputs)
+        return loss_value
+
+    def predict(self, inputs):
+        """ Used for predicting with model but does not have labels """
+        yh = self.model(inputs)
+        return yh
+
+    def trainVAE(self, dataset, batch_size):
+        self.model = self.getMemAE()
+        self.model.fit(dataset, epochs=50, batch_size=batch_size)
+
+    def trainBC(self, dataset, batch_size):
+        self.modelBC = self.getBinaryClassifier()
+        X, y = dataset[:, :-2], dataset[:, -2:]
+        self.modelBC.fit(X, y, epochs=20, batch_size=batch_size)
+
+    def inferBinaryClassifier(self, inputs):
+        yh = self.modelBC(inputs)
+        return yh
+
+    def __call__(self, cache: list, n: int, yh) -> list:
+
+        # Check if embedded cache, then cache is available for the round
+        if any(isinstance(i, list) for i in cache):
+            try:
+                cache = cache[self.round]
+            except:
+                raise ValueError("Active Learning Algo has iterated through each round\'s unlabled cache.")
+
+        # Check if sample size is to large for cache
+        if len(cache) < n:
+            raise ValueError("Sample size n is larger than length of round's cache")
+
+        # Calculate LC(x) values
+        yh_vals = yh.iloc[:, 1].values
+        yh_col_names = ["yh", "ID"]
+        yh = pd.concat([pd.DataFrame(yh_vals), pd.DataFrame(cache)], axis=1)
+        yh.columns = yh_col_names
+
+        # Get ids
+        yh = yh.sort_values(by=['yh'])
+        yh_vals = yh.iloc[:, 0].values
+        yh_dist = yh_vals / np.sum(yh_vals)
+        cache = yh.iloc[:, 1].values
+        # n_largest = yh.nlargest(n, 'yh')
+        # batch = n_largest["ID"].to_list()
+        batch = np.random.choice(cache, n, p=yh_dist, replace=False)
+
+        plt.plot(range(0,len(h_dist)),h_dist)
+        input("p")
+
+        # Log which samples were used for that round
+        self.sample_log[str(self.round)] = batch
+
+        print("\n")
+        print("Round {} selected samples: {}".format(self.round, batch))
+        print("\n")
+
+        # Increment round
+        self.round += 1
+
+        return batch
 
 
 #######################################################
