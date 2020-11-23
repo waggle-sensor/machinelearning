@@ -38,12 +38,12 @@ def main():
     for i in range(0,15):
         np.random.seed(i+1)
         # DataManager parameters
-        split = (.0015, .6985, .3)  # (train, val, unlabeled)
+        split = (.00143, .2, .79857)  # (train, val, unlabeled)
         bins = 1
         keep_bins = False
 
         dataClass = mnistLoader(bins, keep_bins)  # Declare data manager class
-        dataClass.parseData(split, bins, keep_bins)
+        #dataClass.parseData(split, bins, keep_bins)
         dataClass.loadCaches()
 
         # | ----------------------------
@@ -56,7 +56,10 @@ def main():
         #algo = algos.DALOC(input_dim=120)
         #algo = algos.clusterDAL(input_dim=120)
         #algo = algos.uniformSample()
-        algo = algos.VAE(input_dim=120, codings_size=15,Beta=1)
+        #algo = algos.marginConfidence()
+        #algo = algos.clusterMargin(n_cluster=100, p=.8, sub_sample=500)
+        #algo = algos.VAE(input_dim=120, codings_size=15,Beta=1)
+        algo = algos.clusterMargin(n_cluster=100, p=.8, sub_sample=300)
         algo.reset()
 
         # | ----------------------------
@@ -76,18 +79,18 @@ def main():
         engine = Engine(algo, dataClass, zk, sample_size)
 
         # Initial training of model on original training data
-        #engine.initialTrain(epochs=1, batch_size=32, val=True, plot=True)
+        #engine.initialTrain(epochs=15, batch_size=32, val=True, val_track="accuracy", plot=False)
 
-
-        #engine.saveModel("test_model")
-        engine.loadModel("test_model")
+        #engine.saveModel("mnist_model")
+        engine.loadModel("mnist_model")
 
         # Run active learning algo
         # Round is how many times the active learning algo samples
         # cycles is how many epochs the model is retrained each time a round occurs of sampling
-        engine.run(rounds=8, cycles=20, batch_size=32, val=True, plot=False)
-        engine.saveLog(path="results/s100_b1_cs15_"+str(i)+"_log.csv")
-        dataClass.deleteCache()
+        engine.run(rounds=8, cycles=15, batch_size=32, val=True, val_track="accuracy", plot=False)
+        engine.saveLog(path="results/mnist/marginCluster/cm_"+str(i)+"_log.csv")
+        #dataClass.deleteCache()
+
 
     # | ----------------------------
     # | Done

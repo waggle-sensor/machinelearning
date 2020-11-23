@@ -9,6 +9,7 @@ from itertools import chain
 from tqdm import trange
 import matplotlib.pyplot as plt
 import random
+import copy
 
 
 #######################################################
@@ -102,11 +103,17 @@ class Engine():
         self.round = 0  # Keep track of what round of training the system is on
         self.sample_size = sample_size
 
+        self.val_best = 0
+
+        self.val_track = None
+
         self.multipleBins = False
         if self.dataClass.bins > 1:
             self.multipleBins = True
 
         self.log = self.getLog()  # Make log to track active learning
+
+        self.test_cache = []
 
     def getLog(self):
         """ Builds dictionary with proper keys matching to metrics being tracked """
@@ -213,23 +220,48 @@ class Engine():
         shuffle_cache = list(self.dataClass.train_cache)
         random.shuffle(shuffle_cache)
 
-
         # Run batches
         for i in range(cycles):
             for batch in trange(floor(len(self.dataClass.train_cache) / batch_size)):
                 batch_ids = self.dataClass.train_cache[batch_size * batch:batch_size * (batch + 1)]
-                #batch_ids = shuffle_cache[batch_size * batch:batch_size * (batch + 1)]
                 X, y = self.dataClass.getBatch(batch_ids)
+
+                # Try change y dtype
+                y = y.astype('float32')
+
                 loss = self.modelManager.modelObject.trainBatch(X, y)
                 total_loss.append(loss)
 
-        # Run remainders
-        if remainder_samples > 0:
-            batch_ids = self.dataClass.train_cache[(-1) * remainder_samples:]
-            #batch_ids = shuffle_cache[(-1) * remainder_samples:]
-            X, y = self.dataClass.getBatch(batch_ids)
-            loss = self.modelManager.modelObject.trainBatch(X, y)
-            total_loss.append(loss)
+            # Run remainders
+            if remainder_samples > 0:
+                batch_ids = self.dataClass.train_cache[(-1) * remainder_samples:]
+                X, y = self.dataClass.getBatch(batch_ids)
+
+                # Try change y dtype
+                y = y.astype('float32')
+
+                loss = self.modelManager.modelObject.trainBatch(X, y)
+                total_loss.append(loss)
+
+            # Check if val accuracy up or down
+            if self.val_track != None:
+                val_total_loss, total_scores = self.valTest(batch_size)
+                keys = list(total_scores[0].keys())
+                val_metrics = []
+                for i, k in enumerate(keys):
+                    samples = []
+                    for j, sample in enumerate(total_scores):
+                        samples.append((sample[k]))
+                    samples = np.mean(samples)
+                    val_metrics.append(samples)
+
+                val_track_key = keys.index(self.val_track)
+                val_score = val_metrics[val_track_key]
+                if val_score > self.val_best:
+                    self.modelManager.modelObject.model.save_weights("tmp/val_best_weights.h5")
+                    print("Val accuracy improved from {} to {}".format(self.val_best, val_score))
+                    self.val_best = val_score
+
 
         return total_loss
 
@@ -244,6 +276,10 @@ class Engine():
         for batch in trange(floor(len(self.dataClass.val_cache) / batch_size)):
             batch_ids = self.dataClass.val_cache[batch_size * batch:batch_size * (batch + 1)]
             X, y = self.dataClass.getBatch(batch_ids)
+
+            # Try change y dtype
+            y = y.astype('float32')
+
             loss, scores, _ = self.modelManager.modelObject.eval(X, y)
             total_loss.append(loss)
             total_scores.append(scores)
@@ -252,6 +288,10 @@ class Engine():
         if remainder_samples > 0:
             batch_ids = self.dataClass.val_cache[(-1) * remainder_samples:]
             X, y = self.dataClass.getBatch(batch_ids)
+
+            # Try change y dtype
+            y = y.astype('float32')
+
             loss, scores, _ = self.modelManager.modelObject.eval(X, y)
             total_loss.append(loss)
             total_scores.append(scores)
@@ -285,6 +325,10 @@ class Engine():
         for batch in trange(floor(len(cache) / batch_size)):
             batch_ids = cache[batch_size * batch:batch_size * (batch + 1)]
             X, y = self.dataClass.getBatch(batch_ids)
+
+            # Try change y dtype
+            y = y.astype('float32')
+
             if use_extractor == False:
                 _, _, yh = self.modelManager.modelObject.eval(X, y)
                 predictions.append(yh)
@@ -296,6 +340,11 @@ class Engine():
         if remainder_samples > 0:
             batch_ids = cache[(-1) * remainder_samples:]
             X, y = self.dataClass.getBatch(batch_ids)
+
+            # Try change y dtype
+            y = y.astype('float32')
+
+
             if use_extractor == False:
                 _, _, yh = self.modelManager.modelObject.eval(X, y)
                 predictions.append(yh)
@@ -378,8 +427,15 @@ class Engine():
             if self.algoClass.algo_name == "AADA":
                 labeled_targets = -1 * np.ones((labeled_pred.shape[0], 1))
                 labeled_targets = labeled_targets.reshape(labeled_targets.shape[0], 1)
+
+                # try changing type
+                labeled_targets = labeled_targets.astype('float32')
+
         elif self.algoClass.single_output == False:
             labeled_targets = np.hstack((np.ones((labeled_pred.shape[0], 1)), np.zeros((labeled_pred.shape[0], 1))))
+
+            # try changing type
+            labeled_targets = labeled_targets.astype('float32')
 
         # 1b. feed through unlabeled cache (or subset) and add [0,1]
         unlabeled_pred = self.evalCache(cache_df, batch_size, use_extractor=True)
@@ -387,11 +443,17 @@ class Engine():
             if self.algoClass.algo_name == "AADA":
                 unlabeled_targets = np.ones((unlabeled_pred.shape[0], 1))
                 unlabeled_targets = unlabeled_targets.reshape(unlabeled_targets.shape[0], 1)
+
+                # try changing type
+                unlabeled_targets = unlabeled_targets.astype('float32')
         elif self.algoClass.single_output == False:
             unlabeled_targets = np.hstack(
                 (np.zeros((unlabeled_pred.shape[0], 1)), np.ones((unlabeled_pred.shape[0], 1))))
 
-        # 2. Stack data and shuffle rows
+            # try changing type
+            unlabeled_targets = unlabeled_targets.astype('float32')
+
+            # 2. Stack data and shuffle rows
         a = np.concatenate((labeled_pred, labeled_targets), axis=1)
         b = np.concatenate((unlabeled_pred, unlabeled_targets), axis=1)
         temp_dataset = np.concatenate((a, b), axis=0)
@@ -452,6 +514,46 @@ class Engine():
         # 5. return back ids of top samples
         return ids
 
+    def clusterMarginWork(self,cache_ids,batch_size):
+        # Sample Bernouli to determine whether to explore or exploit
+        s = np.random.binomial(1, self.algoClass.p, 1)
+
+        print("Bernoulli Sample: ", s)
+
+        # If s is 0 -> explore, else exploit
+        if s == 0:
+            X, _ = self.dataClass.getBatch(cache_ids)
+            closest_points = self.algoClass.cluster(X, cache_ids)
+        else:
+            # Get model predictions over unlabeled
+            yh = self.evalCache(cache_ids, batch_size)
+            yh = pd.concat([pd.DataFrame(cache_ids), pd.DataFrame(yh)], axis=1)
+
+            # Get margin of all unlabeled cache predictions
+            yh_vals = yh.iloc[:, 1:].values
+            MC_vals = []
+            for i in range(yh_vals.shape[0]):
+                sample = yh_vals[i, :]
+                sample[::-1].sort()
+                y1, y2 = sample[0], sample[1]
+                mc_val = 1 - (y1 - y2)
+                MC_vals.append(mc_val)
+
+            target_col_names = ["y" + str(i) for i in range(yh_vals.shape[1])]
+            yh_col_names = ["MC", "ID"] + target_col_names
+            yh = pd.concat([pd.DataFrame(MC_vals), yh], axis=1)
+            yh.columns = yh_col_names
+
+            # Get ids of n largest LC vals
+            n_largest = yh.nlargest(self.algoClass.sub_sample, 'MC')
+            batch = n_largest["ID"].to_list()
+
+            # Cluster based off of margin values
+            X, _ = self.dataClass.getBatch(batch)
+            closest_points = self.algoClass.cluster(X, batch)
+
+        return closest_points
+
     def runCycle(self, batch_size, cycles):
         """ Subroutine for run where model is trained on batch from algo, metrics logged, and caches updated """
         # ------------------------------------
@@ -467,7 +569,7 @@ class Engine():
                     'Error: Engine has been called to run rounds more times than number of unlabeled caches!')
             cache_df = self.dataClass.unlabeled_cache[self.round]
         else:
-            cache_df = self.dataClass.unlabeled_cache
+            cache_df = copy.deepcopy(self.dataClass.unlabeled_cache)
 
         # Get subset of cache ids based off of active learning algo
         if self.algoClass.predict_to_sample == True:
@@ -478,12 +580,14 @@ class Engine():
         elif self.algoClass.feature_set == True:
             ids = self.trainAlgoClassClasssifier(cache_df, batch_size)
         else:
-            ids = self.algoClass(cache_df, self.sample_size)
+            if self.algoClass.algo_name == "clusterMargin":
+                ids = self.clusterMarginWork(cache_df,batch_size)
+                self.algoClass(ids)
+            else:
+                ids = self.algoClass(cache_df, self.sample_size)
 
         # Manage new labels within caches
         self.dataClass.train_cache.extend(ids)  # Add new ids to train cache
-
-        #shuffle(self.dataClass.train_cache)  # Shuffle new dataClass.train_cache
 
         # Remove new ids from unlabeled caches: (two cases) one or multiple unlabeled caches
         if self.dataClass.bins > 1:
@@ -493,19 +597,15 @@ class Engine():
                         self.dataClass.unlabeled_cache[i].remove(id)
                 # [if id in self.dataClass.unlabeled_cache[i].remove(id) for id in ids]
         elif self.dataClass.bins == 1:
-            [self.dataClass.unlabeled_cache.remove(id) for id in ids]
+
+            for id in ids:
+                if id in self.dataClass.unlabeled_cache:
+                    self.dataClass.unlabeled_cache.remove(id)
+            # WORKING HERE ;;;;;;;;;
 
         # ------------------------------------
         # 2. Train and log
         # ------------------------------------
-
-        # Test restart model
-
-        #     ^
-        #   _| |_
-        #  |{   }|
-        self.modelManager.getModel()
-
 
         total_loss = self.trainBatch(cycles, batch_size)
         total_loss = list(chain(*total_loss))
@@ -513,12 +613,14 @@ class Engine():
         print("Training loss: {}".format(self.round, avg_loss))
         self.train_metric_log["Round_" + str(self.round)] = avg_loss.numpy()
 
-    def run(self, rounds, cycles, batch_size, val=True, plot=False):
+    def run(self, rounds, cycles, batch_size, val=True, val_track=None, plot=False):
         """
         Purpose: Calls runCycle through for loop to perform active learning training
         :param rounds: int that determines number of active learning training rounds
         :return: None
         """
+
+        self.val_track = val_track
 
         print("\n")
         print("-" * 20)
@@ -546,6 +648,9 @@ class Engine():
                         samples.append((sample[k]))
                     samples = np.mean(samples)
                     val_metrics.append(samples)
+                    if self.algoClass.algo_name == "clusterMargin" and i == 0:
+                        self.algoClass.p = samples
+
                     print("{}: {}".format(self.modelManager.modelObject.metrics[i].name, samples))
 
             time_round = time.time() - start_time
@@ -553,6 +658,28 @@ class Engine():
                            val_loss=val_avg_loss.numpy(), val_metrics=val_metrics)
 
             self.round += 1
+
+        # Load best weights
+        self.modelManager.loadBestValWeights("tmp/val_best_weights.h5")
+
+        # Log performance best weights
+        total_loss, total_scores = self.valTest(batch_size)
+        total_loss = list(chain(*total_loss))
+        val_avg_loss = sum(total_loss) / len(total_loss)
+        keys = list(total_scores[0].keys())
+        val_metrics = []
+        for i, k in enumerate(keys):
+            samples = []
+            for j, sample in enumerate(total_scores):
+                samples.append((sample[k]))
+            samples = np.mean(samples)
+            val_metrics.append(samples)
+            print("{}: {}".format(self.modelManager.modelObject.metrics[i].name, samples))
+
+
+        time_round = time.time() - start_time
+        self.updateLog(round="val_best", time_round=time_round, batch_size=batch_size,
+                       train_loss=None, val_loss=val_avg_loss.numpy(), val_metrics=val_metrics)
 
         # Logic to plot loss from active learning round
         if plot == True:
@@ -568,7 +695,9 @@ class Engine():
 
         print("\n" + "Active Learning done")
 
-    def initialTrain(self, epochs, batch_size, val=True, plot=False):
+    def initialTrain(self, epochs, batch_size, val=True,val_track=None,plot=False):
+        self.val_track = val_track
+
         """ Trains model on data present in train cache """
         print("\n")
         print("-" * 20)
@@ -606,6 +735,27 @@ class Engine():
                            train_loss=train_avg_loss.numpy(), val_loss=val_avg_loss.numpy(), val_metrics=val_metrics)
 
         print('Finished initial training of model.')
+
+        # Load best weights
+        self.modelManager.loadBestValWeights("tmp/val_best_weights.h5")
+
+        # Log performance best weights
+        total_loss, total_scores = self.valTest(batch_size)
+        total_loss = list(chain(*total_loss))
+        val_avg_loss = sum(total_loss) / len(total_loss)
+        keys = list(total_scores[0].keys())
+        val_metrics = []
+        for i, k in enumerate(keys):
+            samples = []
+            for j, sample in enumerate(total_scores):
+                samples.append((sample[k]))
+            samples = np.mean(samples)
+            val_metrics.append(samples)
+            print("{}: {}".format(self.modelManager.modelObject.metrics[i].name, samples))
+
+        time_round = time.time() - start_time
+        self.updateLog(round="train_best", time_round=time_round, batch_size=batch_size,
+                       train_loss=None, val_loss=val_avg_loss.numpy(), val_metrics=val_metrics)
 
         # Logic to plot loss from initial training
         if plot == True:
