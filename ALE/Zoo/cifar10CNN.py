@@ -46,7 +46,8 @@ class cifar10CNN(customModel):
 
         # Loss function for the model, takes loss functions from tf.keras.losses
         if loss == None:
-            self.loss = tf.keras.losses.categorical_crossentropy
+            #self.loss = tf.keras.losses.categorical_crossentropy
+            self.loss = tf.keras.losses.cosine_similarity
         else:
             self.loss = loss
 
@@ -74,23 +75,74 @@ class cifar10CNN(customModel):
     def loadModel(self) -> tf.keras.Sequential():
         """ Creates tf.keras model and returns it. Change model architecture here """
 
+        weight_decay = 0.0005
         model = Sequential(name="cifar10CNN")
-        model.add(SeparableConv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same',
-                         input_shape=(32, 32, 3)))
-        model.add(SeparableConv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'))
-        model.add(MaxPooling2D((2, 2)))
+
+        model.add(SeparableConv2D(64, (3, 3), padding='same',
+                         input_shape=(32, 32, 3), kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
         model.add(BatchNormalization())
-        model.add(Dropout(0.2))
-        model.add(SeparableConv2D(64, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'))
-        model.add(SeparableConv2D(64, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'))
-        model.add(MaxPooling2D((2, 2)))
+        model.add(Dropout(0.3))
+        model.add(SeparableConv2D(64, (3, 3), padding='same', kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
         model.add(BatchNormalization())
-        model.add(Dropout(0.2))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+
+        model.add(SeparableConv2D(128, (3, 3), padding='same', kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.4))
+        model.add(SeparableConv2D(128, (3, 3), padding='same', kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
+        model.add(BatchNormalization())
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+
+        model.add(SeparableConv2D(256, (3, 3), padding='same', kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.4))
+        model.add(SeparableConv2D(256, (3, 3), padding='same', kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.4))
+        model.add(SeparableConv2D(256, (3, 3), padding='same', kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
+        model.add(BatchNormalization())
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+
+        model.add(SeparableConv2D(512, (3, 3), padding='same', kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.4))
+        model.add(SeparableConv2D(512, (3, 3), padding='same', kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.4))
+        model.add(SeparableConv2D(512, (3, 3), padding='same', kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
+        model.add(BatchNormalization())
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+
+        model.add(SeparableConv2D(512, (3, 3), padding='same', kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.4))
+        model.add(SeparableConv2D(512, (3, 3), padding='same', kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.4))
+        model.add(SeparableConv2D(512, (3, 3), padding='same', kernel_regularizer=regularizers.l2(weight_decay)))
+        model.add(Activation('relu'))
+        model.add(BatchNormalization())
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Dropout(0.5))
+
         model.add(Flatten())
-        model.add(Dense(128, activation='relu', kernel_initializer='he_uniform'))
+        model.add(Dense(512, kernel_regularizer=regularizers.l2(weight_decay), name='embedding'))
+        model.add(Activation('relu'))
         model.add(BatchNormalization())
-        model.add(Dropout(0.2))
-        model.add(Dense(10, activation='softmax'))
+        model.add(Dropout(0.5))
+        model.add(Dense(10, activation='softmax', name='softmax'))
 
         print("Successfully built the model")
 

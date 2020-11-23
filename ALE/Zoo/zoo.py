@@ -37,6 +37,9 @@ class zooKeeper():
             print("Could not properly load the model class for {}.".format(self.modelName))
             raise ImportError
 
+    def loadBestValWeights(self, path):
+        self.modelObject.model.load_weights(path)
+
 
 #######################################################
 

@@ -45,7 +45,8 @@ class beeCNN(customModel):
 
         # Loss function for the model, takes loss functions from tf.keras.losses
         if loss == None:
-            self.loss = tf.keras.losses.categorical_crossentropy
+            #self.loss = tf.keras.losses.categorical_crossentropy
+            self.loss = tf.keras.losses.cosine_similarity
         else:
             self.loss = loss
 
@@ -79,6 +80,7 @@ class beeCNN(customModel):
         model.add(Conv2D(32, (3, 3), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Flatten())
+        model.add(Dense(120, activation='relu'))
         model.add(Dense(self.num_classes, activation='softmax'))
 
         print("Successfully built the model")

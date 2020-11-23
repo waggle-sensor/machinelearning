@@ -45,13 +45,14 @@ class mnistCNN(customModel):
 
         # Loss function for the model, takes loss functions from tf.keras.losses
         if loss == None:
-            self.loss = tf.keras.losses.categorical_crossentropy
+            #self.loss = tf.keras.losses.categorical_crossentropy
+            self.loss = tf.keras.losses.cosine_similarity
         else:
             self.loss = loss
 
         # Optimizer for the model, takes optimizers from tf.keras.optimizers
         if optimizer == None:
-            self.opt = tf.keras.optimizers.Adam(lr=0.0002)
+            self.opt = tf.keras.optimizers.Adam(lr=0.001)
         else:
             self.opt = optimizer
 
@@ -74,14 +75,15 @@ class mnistCNN(customModel):
         """ Creates tf.keras model and returns it. Change model architecture here """
 
         model = Sequential(name="mnistCNN")
-        model.add(SeparableConv2D(32, (3, 3), activation='relu', input_shape=self.input_shape))
+        model.add(Conv2D(32, (3, 3), activation='relu', input_shape=self.input_shape))
         model.add(MaxPooling2D(pool_size=(2, 2)))
-        model.add(SeparableConv2D(64, (3, 3), activation='relu'))
+        model.add(Conv2D(64, (3, 3), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Flatten())
-        model.add(Dense(128, activation='relu', name='embedding'))
+        model.add(Dense(120, activation='relu', name='embedding'))
         model.add(Dropout(0.5))
         model.add(Dense(10, activation='softmax', name='softmax'))
+        #model.add(Dense(10, activation='sigmoid'))
 
         print("Successfully built the model")
 
