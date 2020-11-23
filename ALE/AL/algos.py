@@ -15,6 +15,9 @@ from tensorflow.keras import regularizers
 from typeguard import typechecked
 
 from sklearn.cluster import KMeans, SpectralClustering, MiniBatchKMeans
+from skimage.feature import hog
+from skimage.color import rgb2gray
+from scipy.cluster.vq import vq
 
 
 import matplotlib.pyplot as plt
@@ -487,13 +490,15 @@ class DAL(alAlgo):
 
         self.opt = tf.keras.optimizers.Adam(lr=0.0001)
         self.loss = tf.keras.losses.categorical_crossentropy
+        self.loss = tf.keras.losses.cosine_similarity
         # self.loss = tf.keras.losses.kl_divergence
 
     def getBinaryClassifier(self):
         model = Sequential(name="BC")
         model.add(Dense(120, activation='relu', input_dim=self.input_dim))
         model.add(Dense(60, activation='relu'))
-        model.add(Dense(2, activation='softmax'))
+        #model.add(Dense(2, activation='softmax'))
+        model.add(Dense(2, activation='sigmoid'))
 
         return model
 
@@ -525,7 +530,7 @@ class DAL(alAlgo):
 
         # Run batches
         print("Training DAL Binary Classifier")
-        for i in tqdm(range(100)):
+        for i in tqdm(range(50)):
             for batch in range(floor(dataset.shape[0] / batch_size)):
                 data = dataset[batch_size * batch:batch_size * (batch + 1), :]
                 X, y = data[:, :-2], data[:, -2:]
@@ -573,6 +578,13 @@ class DAL(alAlgo):
         # Get ids of n largest LC vals
         n_largest = yh.nlargest(n, 'yh')
         batch = n_largest["ID"].to_list()
+
+
+        #input("p")
+        #sort_yh = yh.sort_values(by=['yh'])
+        #plt.scatter(range(0,len(sort_yh)),sort_yh["yh"].values)
+        #plt.show()
+        #input("p")
 
         # Log which samples were used for that round
         self.sample_log[str(self.round)] = batch
@@ -1726,15 +1738,15 @@ class MemAE_AL(alAlgo):
 
     def trainVAE(self, dataset, batch_size):
         self.model = self.getMemAE()
-        self.model.fit(dataset, epochs=25, batch_size=batch_size)
+        self.model.fit(dataset, epochs=75, batch_size=batch_size)
 
     def inferBinaryClassifier(self, inputs):
         yh, _, _ = self.model(inputs)
-        # yh = np.abs(yh - inputs)
-        # yh = np.sum(yh, axis=-1)
+        yh = np.abs(yh - inputs)
+        yh = np.sum(yh, axis=-1)
         # Paper says to use mse as ranking for outliers
-        yh = np.square(yh - inputs)
-        yh = np.mean(yh, axis=-1)
+        #yh = np.square(yh - inputs)
+        #yh = np.mean(yh, axis=-1)
         return yh
 
     def __call__(self, cache: list, n: int, yh) -> list:
@@ -1759,12 +1771,17 @@ class MemAE_AL(alAlgo):
 
         # Get ids
         yh = yh.sort_values(by=['yh'])
-        # yh_vals = yh.iloc[:,0].values
-        # yh_dist = yh_vals/np.sum(yh_vals)
-        # cache = yh.iloc[:,1].values
-        n_largest = yh.nlargest(n, 'yh')
-        batch = n_largest["ID"].to_list()
-        # batch = np.random.choice(cache, n, p=yh_dist,replace=False)
+        yh_vals = yh.iloc[:,0].values
+        yh_dist = yh_vals/np.sum(yh_vals)
+        cache = yh.iloc[:,1].values
+        #n_largest = yh.nlargest(n, 'yh')
+        #batch = n_largest["ID"].to_list()
+        batch = np.random.choice(cache, n, p=yh_dist,replace=False)
+
+
+        #plt.scatter(range(0,len(yh)),yh.iloc[:,0].values)
+        #plt.show()
+        #input("p")
 
         # Log which samples were used for that round
         self.sample_log[str(self.round)] = batch
@@ -1893,8 +1910,9 @@ class MemAE_Binary_AL(alAlgo):
         # batch = n_largest["ID"].to_list()
         batch = np.random.choice(cache, n, p=yh_dist, replace=False)
 
-        plt.plot(range(0,len(h_dist)),h_dist)
-        input("p")
+        #plt.plot(range(0,len(yh_dist)),yh_dist)
+        #plt.show()
+        #input("p")
 
         # Log which samples were used for that round
         self.sample_log[str(self.round)] = batch
@@ -1911,6 +1929,94 @@ class MemAE_Binary_AL(alAlgo):
 
 #######################################################
 
+class clusterMargin(alAlgo):
+    """
+    clusterMargin(alAlgo) Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Custom active learning class, inherits alAlgo class.
+
+    Attributes
+    ----------
+    predict_to_sample : bool
+        Determines if algo needs models prediction on cache to determine what samples from the cache to return
+
+    Methods
+    -------
+    @abc.abstractmethod
+    __call__(self, cache: list, n: int, yh):
+        Empty function that is required to be declared in custom child class. Allows for algo
+        to be called to pick which samples to return based on algo criteria.
+    """
+
+    def __init__(self, n_cluster = 4, p = 0.5, sub_sample=500):
+        super().__init__(algo_name="clusterMargin")
+        self.predict_to_sample = False
+        self.feature_set = False
+        self.single_output = False
+
+        self.k = n_cluster
+        self.p = p
+        self.sub_sample = sub_sample
+
+    def cluster(self, data, cache):
+        data_feature = []
+
+        for i in range(data.shape[0]):
+            if data[i,:,:,:].shape[-1] > 1:
+                img_gray = rgb2gray(data[i,:,:,:])
+            else:
+                img_gray = data[i,:,:,:]
+
+            fd = hog(img_gray,visualize=False)
+            data_feature.append(fd)
+        data = np.stack(data_feature,axis=0)
+
+        k_means = MiniBatchKMeans(init='k-means++', n_clusters=self.k, n_init=10)
+        k_means.fit(data)
+        centroids = k_means.cluster_centers_
+
+        # Sometimes there is repeats ...
+        #
+        # NEED TO COME UP WITH PATCH .... bruh ....
+        #
+        closest, distances = vq(centroids, data)
+        closest_points = [cache[index] for index in closest]
+        closest_points.sort()
+
+        # Check for duplicates
+        s = set()
+        duplicates = set(x for x in closest_points if x in s or s.add(x))
+        print(duplicates)
+        closest_points_filtered = list(set(closest_points))
+        filtered_cache = list(set(cache) - set(closest_points))
+
+        # If duplicates, select random points to make difference
+        if len(closest_points) > len(closest_points_filtered ):
+            r_points = random.sample(range(len(filtered_cache)),len(closest_points) - len(closest_points_filtered ) )
+            r_points_picked = [filtered_cache[index] for index in r_points]
+            closest_points_filtered = closest_points_filtered + r_points_picked
+
+        print(len(closest_points_filtered),self.p)
+        return closest_points_filtered
+
+    def __call__(self, batch) -> list:
+
+        # Log which samples were used for that round
+        self.sample_log[str(self.round)] = batch
+
+        print("\n")
+        print("Round {} selected samples: {}".format(self.round, batch))
+        print("\n")
+
+        # Increment round
+        self.round += 1
+
+
+
+#######################################################
 
 class SpectralNormalization(tf.keras.layers.Wrapper):
     """Performs spectral normalization on weights.
