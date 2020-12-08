@@ -452,7 +452,7 @@ class mnistLoader(DataManager):
 
         # Reshape input X into 2d array to express gray scaled image
         X = X.reshape(X.shape[0], 28, 28, 1)
-        X = X / 255  # Scale input data between [0,1]
+        X = X / 255.0  # Scale input data between [0,1]
 
         # One hot encode targets y
         y_onehot = np.zeros((y.shape[0], 10))
@@ -626,6 +626,229 @@ class beeLoader(DataManager):
 
         imgs = np.concatenate(imgs, axis=0)
         imgs = imgs.reshape(len(samples), 80, 80, 3)
+        targets = np.stack(targets, axis=0)
+
+        return imgs, targets
+
+    def getBatch(self, cache_ids: list):
+        """
+        Purpose
+        _______
+        Receives from algo class list of sample ids to get from memory or RAM
+
+        Arguments
+        __________
+        cache_ids : list
+            list contains ids of what data samples to send back
+
+        Returns
+        _______
+        X : np.array
+            Input values for model
+        y : Target values for model
+
+        """
+
+        # Select data based off of passed cache_ids
+        X, y = self.getBatchData(cache_ids)  # shape (batch_size,80,80,3)
+        return X, y
+
+
+class birdsLoader(DataManager):
+    """
+    birdsLoader Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Load data as needed from the Bees dataset.
+
+    Attributes
+    ----------
+    data_df : pd.DataFrame()
+        Stores dataframe of mnist data. This is unique to this class. Each child class of DataManager
+        is going to have a unique feature such as this due to using different types of data.
+
+    Methods
+    -------
+    getBatch(self, cache_ids: list):
+        grabs row of data from data_df based on id's in passed list. Converts into
+        numpy arrays. Makes input matrix and one hot encoded array as target value.
+        Returns processed input and target data.
+
+    """
+
+    def __init__(self, bins=1, keep_bins=False):
+        super().__init__("Birds", bins, keep_bins)
+
+        # For this data set, it is possible to read in all data at one
+        self.data_df = pd.read_csv(self.data_path + "/raw_data/data_tab.csv")
+        self.img_path = self.data_path + "/raw_data/images/"
+
+    def getSample(self, id) -> (np.array, np.array):
+        """Load image into np.array and make one-hot target array
+
+        Parameters
+        ----------
+        sample : np.array
+            an row from samples (np.array storing ids and class_ids
+            of bee data)
+
+        Returns
+        -------
+        img: np.array
+            a np.array containing bee image data
+        target: np.array
+            a np.array as a one-hot vector expressing bee type
+        """
+
+        class_id = self.data_df[self.data_df["ID"] == id]
+        class_id = class_id["class_id"].values
+
+        img = Image.open(self.img_path + str(id) + ".jpg").convert('RGB')
+        img = img.resize((200,200))
+        img = np.array(img) / 255
+        if img.shape != (200, 200, 3):
+            print(self.img_path + str(id) + ".jpg")
+            img = img[:, :, :3]
+
+        #target = np.zeros(200)
+        #target[class_id] = 1
+        #return img, target
+        return img, class_id
+
+    def getBatchData(self, samples):
+        """Load multiple images into np.array and make one-hot target arrays
+
+        Parameters
+        ----------
+        samples : np.array
+            multiple rows from samples (np.array storing ids and class_ids
+            of bee data)
+
+        Returns
+        -------
+        imgs: np.array
+            a np.array containing multiple bee image data
+        targets: np.array
+            a np.array containing multiple one-hot vector expressing bee types
+        """
+        imgs, targets = [], []
+        for i in range(len(samples)):
+            X_sample, y_sample = self.getSample(samples[i])
+            imgs.append(X_sample)
+            targets.append(y_sample)
+
+        imgs = np.concatenate(imgs, axis=0)
+        imgs = imgs.reshape(len(samples), 200, 200, 3)
+        targets = np.stack(targets, axis=0)
+
+        return imgs, targets
+
+    def getBatch(self, cache_ids: list):
+        """
+        Purpose
+        _______
+        Receives from algo class list of sample ids to get from memory or RAM
+
+        Arguments
+        __________
+        cache_ids : list
+            list contains ids of what data samples to send back
+
+        Returns
+        _______
+        X : np.array
+            Input values for model
+        y : Target values for model
+
+        """
+
+        # Select data based off of passed cache_ids
+        X, y = self.getBatchData(cache_ids)  # shape (batch_size,80,80,3)
+        return X, y
+
+
+class monkeyLoader(DataManager):
+    """
+    monkeyLoader Documentation:
+    --------------------------
+
+    Purpose
+    ----------
+    Load data as needed from the Bees dataset.
+
+    Attributes
+    ----------
+    data_df : pd.DataFrame()
+        Stores dataframe of mnist data. This is unique to this class. Each child class of DataManager
+        is going to have a unique feature such as this due to using different types of data.
+
+    Methods
+    -------
+    getBatch(self, cache_ids: list):
+        grabs row of data from data_df based on id's in passed list. Converts into
+        numpy arrays. Makes input matrix and one hot encoded array as target value.
+        Returns processed input and target data.
+
+    """
+
+    def __init__(self, bins=1, keep_bins=False):
+        super().__init__("Monkey", bins, keep_bins)
+
+        # For this data set, it is possible to read in all data at one
+        self.data_df = pd.read_csv(self.data_path + "/raw_data/data_tab.csv")
+        self.img_path = self.data_path + "/raw_data/images/"
+
+    def getSample(self, id) -> (np.array, np.array):
+        """Load image into np.array and make one-hot target array
+
+        Parameters
+        ----------
+        sample : np.array
+            an row from samples (np.array storing ids and class_ids
+            of bee data)
+
+        Returns
+        -------
+        img: np.array
+            a np.array containing bee image data
+        target: np.array
+            a np.array as a one-hot vector expressing bee type
+        """
+
+        class_id = self.data_df[self.data_df["ID"] == id]
+        class_id = class_id["class_id"].values
+        img = Image.open(self.img_path + str(id) + ".jpg").convert('RGB')
+        img = np.array(img) / 255
+        target = np.zeros(10)
+        target[class_id] = 1
+        return img, target
+
+    def getBatchData(self, samples):
+        """Load multiple images into np.array and make one-hot target arrays
+
+        Parameters
+        ----------
+        samples : np.array
+            multiple rows from samples (np.array storing ids and class_ids
+            of bee data)
+
+        Returns
+        -------
+        imgs: np.array
+            a np.array containing multiple bee image data
+        targets: np.array
+            a np.array containing multiple one-hot vector expressing bee types
+        """
+        imgs, targets = [], []
+        for i in range(len(samples)):
+            X_sample, y_sample = self.getSample(samples[i])
+            imgs.append(X_sample)
+            targets.append(y_sample)
+
+        imgs = np.concatenate(imgs, axis=0)
+        imgs = imgs.reshape(len(samples), 120, 120, 3)
         targets = np.stack(targets, axis=0)
 
         return imgs, targets
