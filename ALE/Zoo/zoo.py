@@ -87,10 +87,13 @@ class customModel(metaclass=abc.ABCMeta):
         for i, metric in enumerate(self.metrics):
             metric.reset_states()
             # Special case if metric is accuracy since need to round to one-hot on prediction
-            if metric.name == 'accuracy':
+            if metric.name == 'accuracy' or metric.name == 'accuracy':
                 y_max = tf.argmax(targets, 1)
                 yh_max = tf.argmax(yh, 1)
                 metric.update_state(y_max, yh_max)
+            elif metric.name == 'sparse_categorical_accuracy':
+                y_max = tf.argmax(targets, 1)
+                metric.update_state(y_max, yh)
             else:
                 metric.update_state(yh, targets)
             scores[metric.name] = metric.result().numpy()
