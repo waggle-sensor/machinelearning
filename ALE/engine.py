@@ -622,6 +622,9 @@ class Engine():
 
         self.val_track = val_track
 
+        # Working here
+        #self.modelManager.loadBestValWeights("tmp/val_best_weights.h5")
+
         print("\n")
         print("-" * 20)
         print("Starting active learning")
@@ -771,9 +774,12 @@ class Engine():
 
     def saveModel(self, model_name=None):
         if model_name == None:
-            self.modelManager.modelObject.model.save('model')
+            #self.modelManager.modelObject.model.save('model')
+            self.modelManager.modelObject.model.save_weights('model')
         else:
-            self.modelManager.modelObject.model.save(model_name)
+            self.modelManager.modelObject.model.save_weights(model_name+".h5")
 
     def loadModel(self, model_name):
-        self.modelManager.modelObject.model = tf.keras.models.load_model(model_name)
+        #self.modelManager.modelObject.model = tf.keras.models.load_model(model_name)
+        self.modelManager.modelObject.model.load_weights(model_name+".h5")
+        self.modelManager.modelObject.model.compile()

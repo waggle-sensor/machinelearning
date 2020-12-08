@@ -36,11 +36,11 @@ def main():
     # | ---------------------------
 
     # DataManager parameters
-    split = (.0212, .2, .7788)  # (train, val, unlabeled)
+    split = (.0735, .2, .7265)  # (train, val, unlabeled)
     bins = 1
     keep_bins = False
 
-    dataClass = beeLoader(bins, keep_bins)  # Declare data manager class
+    dataClass = monkeyLoader(bins, keep_bins)  # Declare data manager class
     #dataClass.parseData(split, bins, keep_bins)
     dataClass.loadCaches()
 
@@ -57,18 +57,18 @@ def main():
     #algo = algos.MemAE_AL(input_dim=120, codings_size=15)
     #algo = algos.MemAE_Binary_AL(input_dim=120, codings_size=15)
     #algo = algos.marginConfidence()
-    algo = algos.uniformSample()
+    #algo = algos.uniformSample()
 
     # Add adjust p value each round
-    #algo = algos.clusterMargin(n_cluster=100, p=.8, sub_sample=300)
+    algo = algos.clusterMargin(n_cluster=50, p=.6, sub_sample=150)
     algo.reset()
 
     # | ----------------------------
     # | 3. Select model
     # | ----------------------------
 
-    modelName = "beeCNN"  # Pick pre-made model
-    metrics = [tf.keras.metrics.Accuracy(), tf.keras.metrics.KLDivergence()]
+    modelName = "monkeyCNN"  # Pick pre-made model
+    metrics = [tf.keras.metrics.SparseCategoricalAccuracy(), tf.keras.metrics.KLDivergence()]
     zk = zoo.zooKeeper(modelName, show_model=True, metrics=metrics)  # Load model and compile
 
     # | ----------------------------
@@ -76,20 +76,20 @@ def main():
     # | ----------------------------
 
     # Declare engine
-    sample_size = 100
+    sample_size = 50
     engine = Engine(algo, dataClass, zk, sample_size)
 
     # Initial training of model on original training data
-    #engine.initialTrain(epochs=20, batch_size=32, val=True, val_track="accuracy" ,plot=True)
+    #engine.initialTrain(epochs=30, batch_size=32, val=True, val_track="sparse_categorical_accuracy", plot=True)
 
-    #engine.saveModel("bee_model")
-    engine.loadModel("bee_model")
+    #engine.saveModel("monkey_model")
+    engine.loadModel("monkey_model")
 
     # Run active learning algo
     # Round is how many times the active learning algo samples
     # cycles is how many epochs the model is retrained each time a round occurs of sampling
-    engine.run(rounds=9, cycles=20, batch_size=32, val=True, val_track="accuracy", plot=True)
-    engine.saveLog(path="bee_passive_log.csv")
+    engine.run(rounds=10, cycles=20, batch_size=32, val=True, val_track="sparse_categorical_accuracy", plot=True)
+    engine.saveLog(path="cluster_monkey_log.csv")
     #dataClass.deleteCache()
 
     # | ----------------------------
