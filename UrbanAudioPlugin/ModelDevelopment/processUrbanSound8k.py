@@ -77,8 +77,6 @@ if __name__ == "__main__":
         ##############################
         downloadUrbanSound8k()
 
-    input('press enter')
-
     ##############################
     print('Load wav file paths into a dict')
     ##############################
