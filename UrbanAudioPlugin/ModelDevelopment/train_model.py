@@ -1,10 +1,12 @@
 """
-python train_model.py --n_gpu 8
+Description: code used to train neural network over UrbanSound8k processed data.
+Takes three arguments: --n_gpu (int > 0) --epochs (int > 0) --use_aug (True,False)
+Ex: python train_model.py --n_gpu 8 --epochs 5 --use_aug True
 """
-
 
 #######################################
 
+# Import modules
 import argparse
 import os
 from glob import glob
@@ -21,15 +23,18 @@ from tensorflow.keras import regularizers
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_gpu", type=int)
+parser.add_argument("--epochs", type=int)
+parser.add_argument("--use_aug", type=bool)
 
 #######################################
 
+# Declare path to data
 data_path = "UrbanSound8k/tfRecords/fold"
 data_aug_path = "UrbanSound8k/tfRecords_aug/fold"
 
+# Declare global variables
 BATCH_SIZE = 32
-LR_STEP = 1
-EPOCHS = 4
+LR_STEP = 3
 VAL_SIZE = 500
 
 #######################################
@@ -37,7 +42,7 @@ VAL_SIZE = 500
 AUTO = tf.data.experimental.AUTOTUNE
 
 def parse_tfrecord(example):
-    """ It is strange you need to use tf.string to read in an image """
+    """ Decodes tfRecord file into data samples  """
     feature_description = {
         "image": tf.io.FixedLenFeature([], tf.string),
         "target": tf.io.FixedLenFeature([], tf.int64),
@@ -51,6 +56,18 @@ def parse_tfrecord(example):
 
 
 def get_dataset(record_files):
+    """ Loads tfRecord files
+
+    Parameters
+    ----------
+    record_files : str or list of str
+        paths of tfRecord files
+
+    Returns
+    -------
+    tf.data.Dataset
+        data loader for keras model
+    """
     dataset = tf.data.TFRecordDataset(record_files, buffer_size=10000)
     dataset = (
         dataset.map(parse_tfrecord, num_parallel_calls=AUTO).cache().shuffle(10000)
@@ -63,6 +80,7 @@ def get_dataset(record_files):
 
 
 def scheduler(epoch, lr):
+    """ Scales learning rate based on current epoch """
     if epoch % LR_STEP == 0:
         return lr * 0.9
     else:
@@ -94,8 +112,11 @@ def getEfficientNetB4(input_shape=(128, 250, 3)):
 #######################################
 
 if __name__ == "__main__":
+    # Intialize arguments
     args = parser.parse_args()
+    EPOCHS = args.epochs
 
+    # Set up multiple gpus if asked
     if args.n_gpu > 1:
         mirrored_strategy = tf.distribute.MirroredStrategy()
         N_GPU = args.n_gpu
@@ -103,6 +124,7 @@ if __name__ == "__main__":
 
     #######################################
 
+    # Parse data folds
     folds = []
     for f in range(1, 11):
         fold = [i for i in range(1, 11) if i != f]
@@ -111,13 +133,17 @@ if __name__ == "__main__":
 
     #######################################
 
+    # Training loop
     total_results = []
     for i, fold in enumerate(folds):
         print("Fold {}".format(i + 1))
         fold_index = i
-        
 
-        train_path = [data_aug_path + str(i) + ".tfrec" for i in fold[1][:]]
+        # Load datasets
+        if args.use_aug == True:
+            train_path = [data_aug_path + str(i) + ".tfrec" for i in fold[1][:]]
+        else:
+            train_path = [data_path + str(i) + ".tfrec" for i in fold[1][:]]
         test_path = data_path + str(fold[0]) + ".tfrec"
 
         full_dataset = get_dataset(train_path)
@@ -125,6 +151,7 @@ if __name__ == "__main__":
         train_dataset = full_dataset.skip(VAL_SIZE).batch(BATCH_SIZE)
         test_dataset = get_dataset(test_path).batch(BATCH_SIZE)
 
+        # Declare model and train
         if args.n_gpu > 1:
             print("Using mirrored strategy!")
             with mirrored_strategy.scope():
@@ -181,8 +208,8 @@ if __name__ == "__main__":
                 verbose=1,
             )
 
+        # Load best weights and evaluate on test data
         model.load_weights("audio_model.h5")
-
         print("Evaluate on test data")
         results = model.evaluate(test_dataset)
         total_results.append(results)
@@ -191,5 +218,6 @@ if __name__ == "__main__":
         if os.path.exists("audio_model.h5"):
             os.remove("audio_model.h5")
 
+    # Save final weights and show final results 
     model.save_weights("final_weights.h5")
     print("Total Results: \n {}".format(total_results))
