@@ -1,5 +1,6 @@
 """
 data_utils.py
+
 Description: utilty functions used for audio data processing.
 """
 
@@ -23,6 +24,14 @@ import librosa.display
 import soundfile as sf
 
 import matplotlib
+
+##############################
+
+def downloadUrbanSound8k():
+    """ Downloads UrbanSound8k dataset """
+    os.system('wget https://zenodo.org/record/1203745/files/UrbanSound8K.tar.gz -O urban8k.tgz')
+    os.system('tar -xzf urban8k.tgz')
+    os.system('mv UrbanSound8K UrbanSound8k')
 
 ##############################
 

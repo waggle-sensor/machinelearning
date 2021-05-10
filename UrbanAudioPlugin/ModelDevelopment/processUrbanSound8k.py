@@ -1,11 +1,15 @@
 """
 processUrbanSound8k.py
+
 Description: process UrbanSound8k data which
 creates UrbanSound8k sampled at 22.5 kHz, MelSpectrograms
 for UrbanSound8k sampled at 22.5 kHz, augmented MelSpectrograms
 for UrbanSound8k sampled at 22.5 kHz, tfRecords for MelSpectrograms
 for UrbanSound8k sampled at 22.5 kHz, and tfRecords
 for augmented MelSpectrograms for UrbanSound8k sampled at 22.5 kHz.
+
+Takes one arguments --download_UrbanSound8k (True,False)
+Ex: python processUrbanSound8k.py --download_UrbanSound8k True
 """
 
 # Path to install UrbanSounds8k dataset
@@ -17,6 +21,7 @@ for augmented MelSpectrograms for UrbanSound8k sampled at 22.5 kHz.
 
 from data_utils import *
 
+import argparse
 import os
 from glob import glob
 
@@ -33,6 +38,12 @@ from sklearn import preprocessing
 
 import matplotlib
 
+##############################
+# Declare parser
+##############################
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--download_UrbanSound8k", type=bool)
 
 ##############################
 # Declare paths for data
@@ -59,6 +70,15 @@ bn_paths = [bn_street_1,bn_street_2,bn_park,bn_street_3]
 ##############################
 
 if __name__ == "__main__":
+    args = parser.parse_args()
+    if args.download_UrbanSound8k == True:
+        ##############################
+        print('Downloading UrbanSound8k dataset')
+        ##############################
+        downloadUrbanSound8k()
+
+    input('press enter')
+
     ##############################
     print('Load wav file paths into a dict')
     ##############################

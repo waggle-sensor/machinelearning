@@ -1,5 +1,8 @@
 """
+train_model.py
+
 Description: code used to train neural network over UrbanSound8k processed data.
+
 Takes three arguments: --n_gpu (int > 0) --epochs (int > 0) --use_aug (True,False)
 Ex: python train_model.py --n_gpu 8 --epochs 5 --use_aug True
 """
@@ -218,6 +221,6 @@ if __name__ == "__main__":
         if os.path.exists("audio_model.h5"):
             os.remove("audio_model.h5")
 
-    # Save final weights and show final results 
+    # Save final weights and show final results
     model.save_weights("final_weights.h5")
     print("Total Results: \n {}".format(total_results))
