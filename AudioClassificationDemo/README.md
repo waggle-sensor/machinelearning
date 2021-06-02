@@ -7,7 +7,6 @@ Demo uses the dataset UrbanSounds8K (https://urbansounddataset.weebly.com/urbans
 import os
 
 def downloadUrbanSound8k():
-    # Downloads UrbanSound8k dataset 
     os.system('wget https://zenodo.org/record/1203745/files/UrbanSound8K.tar.gz -O urban8k.tgz')
     os.system('tar -xzf urban8k.tgz')
 '''
