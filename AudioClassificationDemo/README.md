@@ -20,4 +20,5 @@ Notebook makeRecords.ipynb converts the dataset into tfRecord files so that a tf
 ## Part 3: Train and Test Model 
 File train_model.py trains a CNN over UrbanSounds8K dataset in tfRecord format.
 
-![Alt text](img/urbansound8k_spect_test_plot.png)
+## Comparison of different data prep methods over UrbanSounds8K
+![Alt text](imgs/urbansound8k_spect_test_plot.png)
