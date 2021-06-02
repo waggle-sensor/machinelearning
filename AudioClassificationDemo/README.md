@@ -3,13 +3,13 @@
 ## Data
 Demo uses the dataset UrbanSounds8K (https://urbansounddataset.weebly.com/urbansound8k.html). Below is a Python function to download the data. 
 
-'''
+```python
 import os
 
 def downloadUrbanSound8k():
     os.system('wget https://zenodo.org/record/1203745/files/UrbanSound8K.tar.gz -O urban8k.tgz')
     os.system('tar -xzf urban8k.tgz')
-'''
+```
 
 ## Part 1: Data Prep
 Notebook dataPrep.ipynb shows how to convert an .wav file of an audio clip into spectrogram. 
