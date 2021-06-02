@@ -18,4 +18,4 @@ Notebook dataPrep.ipynb shows how to convert an .wav file of an audio clip into 
 Notebook makeRecords.ipynb converts the dataset into tfRecord files so that a tf.keras model can be used.
 
 ## Part 3: Train and Test Model 
-Notebook model.ipynb trains a CNN over UrbanSounds8K dataset in tfRecord format.
+File train_model.py trains a CNN over UrbanSounds8K dataset in tfRecord format.
